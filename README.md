@@ -1,8 +1,8 @@
 # FrameGraph
 
-A frame graph implementation in basic C++. (little to no template metaprogramming)
+A frame graph implementation in plain C++. 
 
-See [`source/main/cpp/c_framegraph_examples.cpp`](source/main/cpp/c_framegraph_examples.cpp) for an overview of how to declare your passes and resources.
+See [`source/test/cpp/test_framegraph.cpp`](source/test/cpp/test_framegraph.cpp) for an overview of how to declare your passes and resources.
 
 ## Dependencies
 
