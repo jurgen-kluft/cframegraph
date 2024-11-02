@@ -1,5 +1,9 @@
 #include "ccore/c_callback.h"
+#include "ccore/c_memory.h"
+#include "callocator/c_allocator_linear.h"
 #include "cframegraph/c_framegraph.h"
+
+#include "cunittest/cunittest.h"
 
 namespace ncore
 {
@@ -445,3 +449,35 @@ namespace ncore
     } // namespace UserExperience
 
 } // namespace ncore
+
+using namespace ncore;
+
+UNITTEST_SUITE_BEGIN(framegraph)
+{
+    UNITTEST_FIXTURE(basics)
+    {
+        UNITTEST_ALLOCATOR;
+
+        void*          alloc_mem  = nullptr;
+        const u32      alloc_size = 10 * cMB;
+        linear_alloc_t alloc;
+
+        UNITTEST_FIXTURE_SETUP()
+        {
+            alloc_mem = Allocator->allocate(alloc_size);
+            alloc.setup(alloc_mem, alloc_size);
+        }
+
+        UNITTEST_FIXTURE_TEARDOWN() { Allocator->deallocate(alloc_mem); }
+
+        UNITTEST_TEST(setup_teardown)
+        {
+            Fg fg;
+            fg.setup(&alloc, 4096, 1024);
+
+            fg.teardown(&alloc);
+        }
+
+
+    }
+}

@@ -49,8 +49,6 @@ namespace ncore
 
     namespace nframegraph
     {
-        struct Fg;
-
         struct FgFlags
         {
             u32 m_descr;
@@ -62,18 +60,27 @@ namespace ncore
         static const FgPass s_invalid_pass = nullptr;
 
         typedef u16 FgIndex;
+        typedef u16 FgGeneration;
 
+        struct FgTextureInfo;
         struct FgTexture
         {
-            FgIndex index;
+            FgIndex      index;
+            FgGeneration generation;
         };
         static const FgTexture s_invalid_texture = {0xFFFF};
 
+        struct FgBufferInfo;
         struct FgBuffer
         {
-            FgIndex index;
+            FgIndex      index;
+            FgGeneration generation;
         };
         static const FgBuffer s_invalid_buffer = {0xFFFF};
+
+        struct Fg;
+
+        typedef callback_t<void, Fg&, GfxRenderContext*> FgExecuteFn;
 
         struct Fg
         {
@@ -90,7 +97,7 @@ namespace ncore
             void set_prewrite_buffer(callback_t<void, GfxRenderContext*, GfxBuffer*, FgFlags> fn);
             void set_destroy_buffer(callback_t<void, GfxRenderContext*, GfxBuffer*> fn);
 
-            FgPass add_pass(const char* name, callback_t<void, Fg&, GfxRenderContext*> execute);
+            FgPass add_pass(const char* name, FgExecuteFn execute);
 
             FgTexture import(const char* name, GfxTexture* resource, GfxTextureDescr* descr);
             FgBuffer  import(const char* name, GfxBuffer* resource, GfxBufferDescr* descr);
@@ -113,6 +120,8 @@ namespace ncore
             FgFlags          getFlags(FgTexture resource) const;
             FgFlags          getFlags(FgBuffer resource) const;
 
+            DCORE_CLASS_PLACEMENT_NEW_DELETE
+
         private:
             typedef s8          FgType;
             static const FgType FgMain   = 0;
@@ -125,12 +134,11 @@ namespace ncore
             bool pass_contains(FgPass pass, FgType type, FgTexture resource) const;
             bool pass_contains(FgPass pass, FgType type, FgBuffer resource) const;
 
-            alloc_t*       m_allocator;
             u32            m_resource_array_capacity; // maximum number of resources
-            u32            m_fg_generation;           // random number to identify the FG
+            u32            m_resource_generation;     // ID to make resources unique and recognize invalid resources
             u32            m_pass_array_capacity;
             u32            m_pass_array_size;
-            FgPassInfo**   m_passinfo_array;
+            FgPassInfo*    m_passinfo_array;
             FgPass         m_current_passinfo;
             u32            m_textureinfo_cursor[4]; // current number of create texture info resources
             u32            m_bufferinfo_cursor[4];  // current number of create buffer info resources
