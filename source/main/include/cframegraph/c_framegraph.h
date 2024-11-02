@@ -31,10 +31,6 @@ namespace ncore
     //   - Reads resources (buffers, textures)
     //   - Writes resources (buffers, textures)
     //
-    // - Pass to Pass dependency:
-    //   - Can be deduced from the resource dependencies
-    //   - Enable control to manually specify a Pass to Pass dependency
-    //
     // - A Resource (Buffer, Texture):
     //   - Has a State:
     //     - Clear; the state of the resource before the pass starts, it is empty and not usable
@@ -71,7 +67,7 @@ namespace ncore
         struct FgTexture
         {
             u8  m_generation;
-            u8  m_type;
+            u8  m_flags;
             u16 m_index;
         };
         static const FgTexture s_invalid_texture = {0xff, 0xff, 0xffff};
@@ -79,7 +75,7 @@ namespace ncore
         struct FgBuffer
         {
             u8  m_generation;
-            u8  m_type;
+            u8  m_flags;
             u16 m_index;
         };
         static const FgBuffer s_invalid_buffer = {0xff, 0xff, 0xffff};
@@ -88,17 +84,25 @@ namespace ncore
         {
             struct range_t
             {
-                s32 size() const { return end - begin; }
-                s32 begin;
-                s32 end;
+                s32  size() const { return end - begin; }
+                void reset(s32 index) { begin = end = index; }
+                void add(s32 index) { end = index + 1; }
+                s32  begin;
+                s32  end;
+            };
+
+            enum
+            {
+                IMPORTED         = 1,
+                HAS_SIDE_EFFECTS = 1,
             };
 
             struct FgPassInfo
             {
                 const char*                              m_name;
                 callback_t<void, Fg&, GfxRenderContext*> m_execute_fn;
-                bool                                     m_has_side_effects;
-                u32                                      m_array_index;    // the index into the pass array where this pass is stored
+                u16                                      m_flags;
+                u16                                      m_array_index;    // the index into the pass array where this pass is stored
                 s32                                      m_ref_count;      // the number of resources that are written by this pass
                 range_t                                  m_texture_create; // the begin and end index into the 'create' texture array
                 range_t                                  m_texture_read;   // the begin and end index into the 'read' texture array
@@ -106,14 +110,6 @@ namespace ncore
                 range_t                                  m_buffer_create;  // the begin and end index into the 'create' buffer array
                 range_t                                  m_buffer_read;    // the begin and end index into the 'read' buffer array
                 range_t                                  m_buffer_write;   // the begin and end index into the 'write' buffer array
-            };
-
-            enum EFgType
-            {
-                Import,
-                Create,
-                Read,
-                Write,
             };
 
             struct FgResourceInfo
@@ -129,7 +125,6 @@ namespace ncore
                 FgResourceInfo   m_resource;
                 GfxTexture*      m_texture;
                 GfxTextureDescr* m_textureDescr;
-                FgTextureInfo*   m_previous;
             };
 
             struct FgBufferInfo
@@ -137,7 +132,6 @@ namespace ncore
                 FgResourceInfo  m_resource;
                 GfxBuffer*      m_buffer;
                 GfxBufferDescr* m_bufferDescr;
-                FgBufferInfo*   m_previous;
             };
 
             void setup(alloc_t* allocator, u32 resource_capacity, u32 pass_capacity);
@@ -153,18 +147,18 @@ namespace ncore
             void set_prewrite_buffer(callback_t<void, GfxRenderContext*, GfxBuffer*, FgFlags> fn);
             void set_destroy_buffer(callback_t<void, GfxRenderContext*, GfxBuffer*> fn);
 
-            FgPass add_pass(const char* name, callback_t<void, Fg&, void*> execute);
+            FgPass add_pass(const char* name, callback_t<void, Fg&, GfxRenderContext*> execute);
 
             FgTexture import(const char* name, GfxTexture* resource, GfxTextureDescr* descr);
             FgBuffer  import(const char* name, GfxBuffer* resource, GfxBufferDescr* descr);
 
-            FgTexture create(FgPass pass, const char* name, GfxTexture* textureObject, GfxTextureDescr* textureDescr);
-            FgTexture read(FgPass pass, FgTexture texture, FgFlags descr = s_ignore_flags);
-            FgTexture write(FgPass pass, FgTexture texture, FgFlags descr = s_ignore_flags);
+            FgTexture create(const char* name, GfxTexture* textureObject, GfxTextureDescr* textureDescr);
+            FgTexture read(FgTexture texture, FgFlags descr = s_ignore_flags);
+            FgTexture write(FgTexture texture, FgFlags descr = s_ignore_flags);
 
-            FgBuffer create(FgPass pass, const char* name, GfxBuffer* bufferObject, GfxBufferDescr* bufferDescr);
-            FgBuffer read(FgPass pass, FgBuffer buffer, FgFlags descr = s_ignore_flags);
-            FgBuffer write(FgPass pass, FgBuffer buffer, FgFlags descr = s_ignore_flags);
+            FgBuffer create(const char* name, GfxBuffer* bufferObject, GfxBufferDescr* bufferDescr);
+            FgBuffer read(FgBuffer buffer, FgFlags descr = s_ignore_flags);
+            FgBuffer write(FgBuffer buffer, FgFlags descr = s_ignore_flags);
 
             void compile(alloc_t* allocator);
             void execute(GfxRenderContext* ctxt);
@@ -177,8 +171,26 @@ namespace ncore
             FgFlags          getFlags(FgBuffer resource) const;
 
         private:
-            u32 m_resource_array_capacity; // maximum number of resources
-            u32 m_fg_generation;           // random number to identify the FG
+            alloc_t*        m_allocator;
+            u32             m_resource_array_capacity; // maximum number of resources
+            u32             m_fg_generation;           // random number to identify the FG
+            u32             m_pass_array_capacity;
+            u32             m_pass_array_size;
+            FgPassInfo*     m_current_passinfo;
+            FgPassInfo**    m_passinfo_array;
+            u32             m_textureinfo_create_size; // current number of create texture info resources
+            u32             m_textureinfo_read_size;   // current number of read texture info resources
+            u32             m_textureinfo_write_size;  // current number of write texture info resources
+            u32             m_bufferinfo_create_size;  // current number of create buffer info resources
+            u32             m_bufferinfo_read_size;    // current number of read buffer info resources
+            u32             m_bufferinfo_write_size;   // current number of write buffer info resources
+            FgTextureInfo** m_textureinfo_create_array;
+            FgTextureInfo** m_textureinfo_read_array;
+            FgTextureInfo** m_textureinfo_write_array;
+            FgBufferInfo**  m_bufferinfo_create_array;
+            FgBufferInfo**  m_bufferinfo_read_array;
+            FgBufferInfo**  m_bufferinfo_write_array;
+            FgFlags*        m_resource_info_flags;
 
             callback_t<void, GfxRenderContext*, GfxTexture*, GfxTextureDescr*> m_create_texture;
             callback_t<void, GfxRenderContext*, GfxTexture*, FgFlags>          m_preread_texture;
@@ -188,16 +200,6 @@ namespace ncore
             callback_t<void, GfxRenderContext*, GfxBuffer*, FgFlags>           m_preread_buffer;
             callback_t<void, GfxRenderContext*, GfxBuffer*, FgFlags>           m_prewrite_buffer;
             callback_t<void, GfxRenderContext*, GfxBuffer*>                    m_destroy_buffer;
-
-            u32            m_texture_info_array_size; // current number of used texture info resources
-            u32            m_buffer_info_array_size;  // current number of used buffer info resources
-            FgTextureInfo* m_texture_info_array;
-            FgBufferInfo*  m_buffer_info_array;
-            FgFlags*       m_resource_info_flags;
-
-            u32         m_pass_array_capacity;
-            u32         m_pass_array_size;
-            FgPassInfo* m_pass_info_array;
         };
     } // namespace nframegraph
 } // namespace ncore

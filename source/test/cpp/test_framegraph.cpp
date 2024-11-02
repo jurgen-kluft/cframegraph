@@ -94,7 +94,7 @@ namespace ncore
                     fg.write(pass, out_RT);
                 }
 
-                void execute(Fg& fg, void* ctxt)
+                void execute(Fg& fg, GfxRenderContext* ctxt)
                 {
                     GfxTexture* gtarget = fg.get(out_RT);
 
@@ -169,7 +169,7 @@ namespace ncore
                         out_albedoRT = fg.write(pass, out_albedoRT);
                     }
 
-                    void execute(Fg& fg, void* ctxt)
+                    void execute(Fg& fg, GfxRenderContext* ctxt)
                     {
                         GfxTexture* gdepth  = fg.get(out_depthRT);
                         GfxTexture* gnormal = fg.get(out_normalRT);
@@ -228,7 +228,7 @@ namespace ncore
                         output_HDR = fg.write(pass, output_HDR);
                     }
 
-                    void execute(Fg& fg, void* ctxt)
+                    void execute(Fg& fg, GfxRenderContext* ctxt)
                     {
                         GfxTexture* ghdr    = fg.get(output_HDR);
                         GfxTexture* gdepth  = fg.get(in_depthRT);
@@ -397,7 +397,7 @@ namespace ncore
                             out_FXAA = fg.write(pass, out_FXAA);
                         }
 
-                        void execute(Fg& fg, void* ctxt)
+                        void execute(Fg& fg, GfxRenderContext* ctxt)
                         {
                             GfxRenderContext& rc = *(GfxRenderContext*)ctxt;
                             // renderFullScreenPostProcess(rc);
