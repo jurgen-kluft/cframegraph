@@ -90,8 +90,8 @@ namespace ncore
                 {
                     pass = fg.add_pass("SimplePass", callback_t(this, &SimplePass::execute));
 
-                    out_RT = fg.create(pass, "SimplePassOutput", &targetTexture, &targetTextureDescr);
-                    fg.write(pass, out_RT);
+                    out_RT = fg.create("SimplePassOutput", &targetTexture, &targetTextureDescr);
+                    fg.write(out_RT);
                 }
 
                 void execute(Fg& fg, GfxRenderContext* ctxt)
@@ -159,14 +159,14 @@ namespace ncore
                         pass = fg.add_pass("GBufferPass", callback_t(this, &GBufferPass::execute));
 
                         // Create GBuffer render targets
-                        out_depthRT = fg.create(pass, "depthRT", &depthTexture, &depthTextureDescr);
-                        out_depthRT = fg.write(pass, out_depthRT);
+                        out_depthRT = fg.create("depthRT", &depthTexture, &depthTextureDescr);
+                        out_depthRT = fg.write(out_depthRT);
 
-                        out_normalRT = fg.create(pass, "normalRT", &normalTexture, &normalTextureDescr);
-                        out_normalRT = fg.write(pass, out_normalRT);
+                        out_normalRT = fg.create("normalRT", &normalTexture, &normalTextureDescr);
+                        out_normalRT = fg.write(out_normalRT);
 
-                        out_albedoRT = fg.create(pass, "albedoRT", &albedoTexture, &albedoTextureDescr);
-                        out_albedoRT = fg.write(pass, out_albedoRT);
+                        out_albedoRT = fg.create("albedoRT", &albedoTexture, &albedoTextureDescr);
+                        out_albedoRT = fg.write(out_albedoRT);
                     }
 
                     void execute(Fg& fg, GfxRenderContext* ctxt)
@@ -217,15 +217,16 @@ namespace ncore
                         in_albedoRT = _in_albedoRT;
 
                         pass = fg.add_pass("LightingPass", callback_t(this, &LightingPass::execute));
+                        {
+                            // Lighting pass is reading gbuffer render targets
+                            fg.read(in_depthRT);
+                            fg.read(in_normalRT);
+                            fg.read(in_albedoRT);
 
-                        // Lighting pass is reading gbuffer render targets
-                        fg.read(pass, in_depthRT);
-                        fg.read(pass, in_normalRT);
-                        fg.read(pass, in_albedoRT);
-
-                        // Lighting pass is generating a HDR render target
-                        output_HDR = fg.create(pass, "HDR", &hdrTexture, &hdrTextureDescr);
-                        output_HDR = fg.write(pass, output_HDR);
+                            // Lighting pass is generating a HDR render target
+                            output_HDR = fg.create("HDR", &hdrTexture, &hdrTextureDescr);
+                            output_HDR = fg.write(output_HDR);
+                        }
                     }
 
                     void execute(Fg& fg, GfxRenderContext* ctxt)
@@ -381,20 +382,21 @@ namespace ncore
                         void setup(Fg& fg, FgTexture input)
                         {
                             pass = fg.add_pass("FXAA", callback_t(this, &FXAA::execute));
+                            {
+                                GfxTextureDescr* inputDescr = fg.getDescr(input);
+                                // Copy the input texture description to the output texture description
+                                outputTextureDescr.width  = inputDescr->width;
+                                outputTextureDescr.height = inputDescr->height;
+                                // ...
 
-                            GfxTextureDescr* inputDescr = fg.getDescr(input);
-                            // Copy the input texture description to the output texture description
-                            outputTextureDescr.width  = inputDescr->width;
-                            outputTextureDescr.height = inputDescr->height;
-                            // ...
+                                // The input and how and from where we are going to read it
+                                TextureRead input_tr = setupTextureRead(2, 0, PipelineStage_FragmentShader, TextureRead::Type::CombinedImageSampler);
+                                fg.read(input, encodeTextureRead(input_tr));
 
-                            // The input and how and from where we are going to read it
-                            TextureRead input_tr = setupTextureRead(2, 0, PipelineStage_FragmentShader, TextureRead::Type::CombinedImageSampler);
-                            fg.read(pass, input, encodeTextureRead(input_tr));
-
-                            // We require an output render target and we will write the result of FXAA to that target
-                            out_FXAA = fg.create(pass, "FXAA_RT", &outputTexture, &outputTextureDescr);
-                            out_FXAA = fg.write(pass, out_FXAA);
+                                // We require an output render target and we will write the result of FXAA to that target
+                                out_FXAA = fg.create("FXAA_RT", &outputTexture, &outputTextureDescr);
+                                out_FXAA = fg.write(out_FXAA);
+                            }
                         }
 
                         void execute(Fg& fg, GfxRenderContext* ctxt)
