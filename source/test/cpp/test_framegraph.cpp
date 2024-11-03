@@ -15,15 +15,16 @@ namespace ncore
 
     struct GfxTexture
     {
-        // ...
+        s32 ref_count;
     };
 
     struct GfxTextureDescr
     {
-        u16 width      = 1;
-        u16 height     = 1;
-        u32 depth      = 1;
-        u32 mip_levels = 1;
+        s32 ref_count;
+        u16 width  = 1;
+        u16 height = 1;
+        // u32 depth      = 1;
+        // u32 mip_levels = 1;
         // type
         // format
         // ...
@@ -31,15 +32,18 @@ namespace ncore
 
     struct GfxBuffer
     {
+        s32 ref_count;
     };
 
     struct GfxBufferDescr
     {
-        // ...
+        s32 ref_count;
     };
 
     struct GfxRenderContext
     {
+        s32 ref_count;
+
         void beginRenderPass(GfxTexture* targetA) {}
         void beginRenderPass(GfxTexture* depth, GfxTexture* normal, GfxTexture* albedo) {}
         void endRenderPass() {}
@@ -61,22 +65,28 @@ namespace ncore
 
     void createTexture(GfxRenderContext* ctxt, GfxTexture* texture, GfxTextureDescr* descr)
     {
-        // ...
+        ctxt->ref_count += 1;
+        texture->ref_count += 1;
+        descr->ref_count += 1;
     }
 
     void destroyTexture(GfxRenderContext* ctxt, GfxTexture* texture)
     {
-        // ...
+        ctxt->ref_count += 1;
+        texture->ref_count += 1;
     }
 
     void createBuffer(GfxRenderContext* ctxt, GfxBuffer* buffer, GfxBufferDescr* descr)
     {
-        // ...
+        ctxt->ref_count += 1;
+        buffer->ref_count += 1;
+        descr->ref_count += 1;
     }
 
     void destroyBuffer(GfxRenderContext* ctxt, GfxBuffer* buffer)
     {
-        // ...
+        ctxt->ref_count += 1;
+        buffer->ref_count += 1;
     }
 
     namespace UserExperience
@@ -92,10 +102,12 @@ namespace ncore
 
                 void setup(Fg* fg)
                 {
-                    pass = fg_add_pass(fg, "SimplePass", callback_t(this, &SimplePass::execute));
-
-                    out_RT = fg_create(fg, "SimplePassOutput", &targetTexture, &targetTextureDescr);
-                    fg_write(fg, out_RT);
+                    pass = fg_open_pass(fg, "SimplePass", FgPassNode, callback_t(this, &SimplePass::execute));
+                    {
+                        out_RT = fg_create(fg, "SimplePassOutput", &targetTexture, &targetTextureDescr);
+                        fg_write(fg, out_RT);
+                    }
+                    fg_close_pass(fg);
                 }
 
                 void execute(Fg* fg, GfxRenderContext* ctxt)
@@ -159,17 +171,18 @@ namespace ncore
 
                     void setup(Fg* fg, GfxRenderables* ra)
                     {
-                        pass = fg_add_pass(fg, "GBufferPass", callback_t(this, &GBufferPass::execute));
+                        pass = fg_open_pass(fg, "GBufferPass", FgPassNode, callback_t(this, &GBufferPass::execute));
+                        { // Create GBuffer render targets
+                            out_depthRT = fg_create(fg, "depthRT", &depthTexture, &depthTextureDescr);
+                            out_depthRT = fg_write(fg, out_depthRT);
 
-                        // Create GBuffer render targets
-                        out_depthRT = fg_create(fg, "depthRT", &depthTexture, &depthTextureDescr);
-                        out_depthRT = fg_write(fg, out_depthRT);
+                            out_normalRT = fg_create(fg, "normalRT", &normalTexture, &normalTextureDescr);
+                            out_normalRT = fg_write(fg, out_normalRT);
 
-                        out_normalRT = fg_create(fg, "normalRT", &normalTexture, &normalTextureDescr);
-                        out_normalRT = fg_write(fg, out_normalRT);
-
-                        out_albedoRT = fg_create(fg, "albedoRT", &albedoTexture, &albedoTextureDescr);
-                        out_albedoRT = fg_write(fg, out_albedoRT);
+                            out_albedoRT = fg_create(fg, "albedoRT", &albedoTexture, &albedoTextureDescr);
+                            out_albedoRT = fg_write(fg, out_albedoRT);
+                        }
+                        fg_close_pass(fg);
                     }
 
                     void execute(Fg* fg, GfxRenderContext* ctxt)
@@ -219,7 +232,7 @@ namespace ncore
                         in_normalRT = _in_normalRT;
                         in_albedoRT = _in_albedoRT;
 
-                        pass = fg_add_pass(fg, "LightingPass", callback_t(this, &LightingPass::execute));
+                        pass = fg_open_pass(fg, "LightingPass", FgPassNode, callback_t(this, &LightingPass::execute));
                         {
                             // Lighting pass is reading gbuffer render targets
                             fg_read(fg, in_depthRT);
@@ -230,6 +243,7 @@ namespace ncore
                             output_HDR = fg_create(fg, "HDR", &hdrTexture, &hdrTextureDescr);
                             output_HDR = fg_write(fg, output_HDR);
                         }
+                        fg_close_pass(fg);
                     }
 
                     void execute(Fg* fg, GfxRenderContext* ctxt)
@@ -383,7 +397,7 @@ namespace ncore
 
                         void setup(Fg* fg, FgTexture input)
                         {
-                            pass = fg_add_pass(fg, "FXAA", callback_t(this, &FXAA::execute));
+                            pass = fg_open_pass(fg, "FXAA", FgPassNode, callback_t(this, &FXAA::execute));
                             {
                                 GfxTextureDescr* inputDescr = fg_getDescr(fg, input);
                                 // Copy the input texture description to the output texture description
@@ -399,6 +413,7 @@ namespace ncore
                                 out_FXAA = fg_create(fg, "FXAA_RT", &outputTexture, &outputTextureDescr);
                                 out_FXAA = fg_write(fg, out_FXAA);
                             }
+                            fg_close_pass(fg);
                         }
 
                         void execute(Fg* fg, GfxRenderContext* ctxt)
@@ -493,6 +508,7 @@ UNITTEST_SUITE_BEGIN(framegraph)
 
         struct SimplePass
         {
+            s32  m_executed;
             FgPass          pass;
             FgTexture       out_RT;
             GfxTexture      targetTexture;
@@ -501,12 +517,12 @@ UNITTEST_SUITE_BEGIN(framegraph)
             void execute(Fg* fg, GfxRenderContext* ctxt)
             {
                 GfxTexture* gtarget = fg_get(fg, out_RT);
-
-                // ...
+                m_executed += 1;
             }
 
             SimplePass(u16 width, u16 height)
-                : pass(s_invalid_pass)
+                : m_executed(0)
+                , pass(s_invalid_pass)
                 , out_RT(s_invalid_texture)
             {
                 targetTextureDescr.width  = width;
@@ -528,13 +544,18 @@ UNITTEST_SUITE_BEGIN(framegraph)
 
                 {
                     SimplePass simplePass(1280, 720);
-                    simplePass.pass   = fg_add_pass(fg, "SimplePass", callback_t(&simplePass, &SimplePass::execute));
-                    simplePass.out_RT = fg_create(fg, "SimplePassOutput", &simplePass.targetTexture, &simplePass.targetTextureDescr);
-                    fg_write(fg, simplePass.out_RT);
-                }
+                    simplePass.pass = fg_open_pass(fg, "SimplePass", FgPassFinal, callback_t(&simplePass, &SimplePass::execute));
+                    {
+                        simplePass.out_RT = fg_create(fg, "SimplePassOutput", &simplePass.targetTexture, &simplePass.targetTextureDescr);
+                        fg_write(fg, simplePass.out_RT);
+                    }
+                    fg_close_pass(fg);
 
-                fg_compile(fg, &alloc);
-                fg_execute(fg, &ctxt);
+                    fg_compile(fg, &alloc);
+                    fg_execute(fg, &ctxt);
+
+                    CHECK_EQUAL(1, simplePass.m_executed);
+                }
             }
             fg_teardown(fg);
         }
