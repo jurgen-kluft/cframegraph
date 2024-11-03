@@ -58,75 +58,129 @@ namespace ncore
             GfxBufferDescr* m_bufferDescr;
         };
 
-        void Fg::setup(alloc_t* allocator, u32 resource_capacity, u32 pass_capacity)
+        typedef s8          FgType;
+        static const FgType FgMain   = 0;
+        static const FgType FgCreate = 1;
+        static const FgType FgRead   = 2;
+        static const FgType FgWrite  = 3;
+
+        struct Fg
         {
-            m_resource_array_capacity = resource_capacity;
-            m_resource_generation     = 0;
+            DCORE_CLASS_PLACEMENT_NEW_DELETE
 
-            m_pass_array_size     = 0;
-            m_pass_array_capacity = pass_capacity;
-            m_passinfo_array      = g_allocate_array_and_clear<FgPassInfo>(allocator, pass_capacity);
+            bool is_valid(FgTexture resource) const;
+            bool is_valid(FgBuffer resource) const;
+            bool pass_contains(FgPass pass, FgType type, FgTexture resource) const;
+            bool pass_contains(FgPass pass, FgType type, FgBuffer resource) const;
 
-            m_textureinfo_array = g_allocate_array_and_clear<FgTextureInfo>(allocator, resource_capacity);
-            m_textureinfo_flags = g_allocate_array_and_clear<FgFlags>(allocator, resource_capacity);
+            alloc_t*       m_allocator;
+            u32            m_resource_array_capacity; // maximum number of resources
+            u32            m_resource_generation;     // ID to make resources unique and recognize invalid resources
+            u32            m_pass_array_capacity;
+            u32            m_pass_array_size;
+            FgPassInfo*    m_passinfo_array;
+            FgPass         m_current_passinfo;
+            u32            m_textureinfo_cursor[4]; // current number of create texture info resources
+            u32            m_bufferinfo_cursor[4];  // current number of create buffer info resources
+            FgTextureInfo* m_textureinfo_array;
+            FgFlags*       m_textureinfo_flags;
+            FgIndex*       m_textureinfo_create_array;
+            FgIndex*       m_textureinfo_read_array;
+            FgIndex*       m_textureinfo_write_array;
+            FgBufferInfo*  m_bufferinfo_array;
+            FgFlags*       m_bufferinfo_flags;
+            FgIndex*       m_bufferinfo_create_array;
+            FgIndex*       m_bufferinfo_read_array;
+            FgIndex*       m_bufferinfo_write_array;
 
-            m_textureinfo_create_array = g_allocate_array_and_clear<FgIndex>(allocator, resource_capacity);
-            m_textureinfo_read_array   = g_allocate_array_and_clear<FgIndex>(allocator, resource_capacity);
-            m_textureinfo_write_array  = g_allocate_array_and_clear<FgIndex>(allocator, resource_capacity);
+            callback_t<void, GfxRenderContext*, GfxTexture*, GfxTextureDescr*> m_create_texture;
+            callback_t<void, GfxRenderContext*, GfxTexture*, FgFlags>          m_preread_texture;
+            callback_t<void, GfxRenderContext*, GfxTexture*, FgFlags>          m_prewrite_texture;
+            callback_t<void, GfxRenderContext*, GfxTexture*>                   m_destroy_texture;
+            callback_t<void, GfxRenderContext*, GfxBuffer*, GfxBufferDescr*>   m_create_buffer;
+            callback_t<void, GfxRenderContext*, GfxBuffer*, FgFlags>           m_preread_buffer;
+            callback_t<void, GfxRenderContext*, GfxBuffer*, FgFlags>           m_prewrite_buffer;
+            callback_t<void, GfxRenderContext*, GfxBuffer*>                    m_destroy_buffer;
+        };
 
-            m_bufferinfo_array = g_allocate_array_and_clear<FgBufferInfo>(allocator, resource_capacity);
-            m_bufferinfo_flags = g_allocate_array_and_clear<FgFlags>(allocator, resource_capacity);
+        Fg* fg_setup(alloc_t* allocator, u32 resource_capacity, u32 pass_capacity)
+        {
+            Fg* fg = g_allocate_and_clear<Fg>(allocator);
 
-            m_bufferinfo_create_array = g_allocate_array_and_clear<FgIndex>(allocator, resource_capacity);
-            m_bufferinfo_read_array   = g_allocate_array_and_clear<FgIndex>(allocator, resource_capacity);
-            m_bufferinfo_write_array  = g_allocate_array_and_clear<FgIndex>(allocator, resource_capacity);
+            fg->m_allocator = allocator;
+
+            fg->m_resource_array_capacity = resource_capacity;
+            fg->m_resource_generation     = 0;
+
+            fg->m_pass_array_size     = 0;
+            fg->m_pass_array_capacity = pass_capacity;
+            fg->m_passinfo_array      = g_allocate_array_and_clear<FgPassInfo>(allocator, pass_capacity);
+
+            fg->m_textureinfo_array = g_allocate_array_and_clear<FgTextureInfo>(allocator, resource_capacity);
+            fg->m_textureinfo_flags = g_allocate_array_and_clear<FgFlags>(allocator, resource_capacity);
+
+            fg->m_textureinfo_create_array = g_allocate_array_and_clear<FgIndex>(allocator, resource_capacity);
+            fg->m_textureinfo_read_array   = g_allocate_array_and_clear<FgIndex>(allocator, resource_capacity);
+            fg->m_textureinfo_write_array  = g_allocate_array_and_clear<FgIndex>(allocator, resource_capacity);
+
+            fg->m_bufferinfo_array = g_allocate_array_and_clear<FgBufferInfo>(allocator, resource_capacity);
+            fg->m_bufferinfo_flags = g_allocate_array_and_clear<FgFlags>(allocator, resource_capacity);
+
+            fg->m_bufferinfo_create_array = g_allocate_array_and_clear<FgIndex>(allocator, resource_capacity);
+            fg->m_bufferinfo_read_array   = g_allocate_array_and_clear<FgIndex>(allocator, resource_capacity);
+            fg->m_bufferinfo_write_array  = g_allocate_array_and_clear<FgIndex>(allocator, resource_capacity);
+
+            return fg;
         }
 
-        void Fg::teardown(alloc_t* allocator)
+        void fg_teardown(Fg*& fg)
         {
-            g_deallocate_array(allocator, m_passinfo_array);
-            g_deallocate_array(allocator, m_textureinfo_array);
-            g_deallocate_array(allocator, m_textureinfo_flags);
-            g_deallocate_array(allocator, m_textureinfo_create_array);
-            g_deallocate_array(allocator, m_textureinfo_read_array);
-            g_deallocate_array(allocator, m_textureinfo_write_array);
-            g_deallocate_array(allocator, m_bufferinfo_array);
-            g_deallocate_array(allocator, m_bufferinfo_flags);
-            g_deallocate_array(allocator, m_bufferinfo_create_array);
-            g_deallocate_array(allocator, m_bufferinfo_read_array);
-            g_deallocate_array(allocator, m_bufferinfo_write_array);
+            g_deallocate_array(fg->m_allocator, fg->m_passinfo_array);
+            g_deallocate_array(fg->m_allocator, fg->m_textureinfo_array);
+            g_deallocate_array(fg->m_allocator, fg->m_textureinfo_flags);
+            g_deallocate_array(fg->m_allocator, fg->m_textureinfo_create_array);
+            g_deallocate_array(fg->m_allocator, fg->m_textureinfo_read_array);
+            g_deallocate_array(fg->m_allocator, fg->m_textureinfo_write_array);
+            g_deallocate_array(fg->m_allocator, fg->m_bufferinfo_array);
+            g_deallocate_array(fg->m_allocator, fg->m_bufferinfo_flags);
+            g_deallocate_array(fg->m_allocator, fg->m_bufferinfo_create_array);
+            g_deallocate_array(fg->m_allocator, fg->m_bufferinfo_read_array);
+            g_deallocate_array(fg->m_allocator, fg->m_bufferinfo_write_array);
+
+            g_deallocate(fg->m_allocator, fg);
+            fg = nullptr;
         }
 
-        void Fg::set_create_texture(callback_t<void, GfxRenderContext*, GfxTexture*, GfxTextureDescr*> fn) { m_create_texture = fn; }
-        void Fg::set_preread_texture(callback_t<void, GfxRenderContext*, GfxTexture*, FgFlags> fn) { m_preread_texture = fn; }
-        void Fg::set_prewrite_texture(callback_t<void, GfxRenderContext*, GfxTexture*, FgFlags> fn) { m_prewrite_texture = fn; }
-        void Fg::set_destroy_texture(callback_t<void, GfxRenderContext*, GfxTexture*> fn) { m_destroy_texture = fn; }
+        void fg_set_create_texture(Fg* fg, callback_t<void, GfxRenderContext*, GfxTexture*, GfxTextureDescr*> fn) { fg->m_create_texture = fn; }
+        void fg_set_preread_texture(Fg* fg, callback_t<void, GfxRenderContext*, GfxTexture*, FgFlags> fn) { fg->m_preread_texture = fn; }
+        void fg_set_prewrite_texture(Fg* fg, callback_t<void, GfxRenderContext*, GfxTexture*, FgFlags> fn) { fg->m_prewrite_texture = fn; }
+        void fg_set_destroy_texture(Fg* fg, callback_t<void, GfxRenderContext*, GfxTexture*> fn) { fg->m_destroy_texture = fn; }
 
-        void Fg::set_create_buffer(callback_t<void, GfxRenderContext*, GfxBuffer*, GfxBufferDescr*> fn) { m_create_buffer = fn; }
-        void Fg::set_preread_buffer(callback_t<void, GfxRenderContext*, GfxBuffer*, FgFlags> fn) { m_preread_buffer = fn; }
-        void Fg::set_prewrite_buffer(callback_t<void, GfxRenderContext*, GfxBuffer*, FgFlags> fn) { m_prewrite_buffer = fn; }
-        void Fg::set_destroy_buffer(callback_t<void, GfxRenderContext*, GfxBuffer*> fn) { m_destroy_buffer = fn; }
+        void fg_set_create_buffer(Fg* fg, callback_t<void, GfxRenderContext*, GfxBuffer*, GfxBufferDescr*> fn) { fg->m_create_buffer = fn; }
+        void fg_set_preread_buffer(Fg* fg, callback_t<void, GfxRenderContext*, GfxBuffer*, FgFlags> fn) { fg->m_preread_buffer = fn; }
+        void fg_set_prewrite_buffer(Fg* fg, callback_t<void, GfxRenderContext*, GfxBuffer*, FgFlags> fn) { fg->m_prewrite_buffer = fn; }
+        void fg_set_destroy_buffer(Fg* fg, callback_t<void, GfxRenderContext*, GfxBuffer*> fn) { fg->m_destroy_buffer = fn; }
 
-        FgPass Fg::add_pass(const char* name, FgExecuteFn execute)
+        FgPass fg_add_pass(Fg* fg, const char* name, FgExecuteFn execute)
         {
-            FgPassInfo* pi    = &m_passinfo_array[m_pass_array_size];
+            FgPassInfo* pi    = &fg->m_passinfo_array[fg->m_pass_array_size];
             pi->m_name        = name;
             pi->m_execute_fn  = execute;
             pi->m_flags       = 0;
-            pi->m_array_index = m_pass_array_size;
+            pi->m_array_index = fg->m_pass_array_size;
             pi->m_ref_count   = 0;
-            pi->m_texture_create.reset(m_textureinfo_cursor[FgCreate]);
-            pi->m_texture_read.reset(m_textureinfo_cursor[FgRead]);
-            pi->m_texture_write.reset(m_textureinfo_cursor[FgWrite]);
-            pi->m_buffer_create.reset(m_bufferinfo_cursor[FgCreate]);
-            pi->m_buffer_read.reset(m_bufferinfo_cursor[FgRead]);
-            pi->m_buffer_write.reset(m_bufferinfo_cursor[FgWrite]);
-            m_pass_array_size++;
+            pi->m_texture_create.reset(fg->m_textureinfo_cursor[FgCreate]);
+            pi->m_texture_read.reset(fg->m_textureinfo_cursor[FgRead]);
+            pi->m_texture_write.reset(fg->m_textureinfo_cursor[FgWrite]);
+            pi->m_buffer_create.reset(fg->m_bufferinfo_cursor[FgCreate]);
+            pi->m_buffer_read.reset(fg->m_bufferinfo_cursor[FgRead]);
+            pi->m_buffer_write.reset(fg->m_bufferinfo_cursor[FgWrite]);
+            fg->m_pass_array_size++;
 
             return pi;
         }
 
-        FgTexture Fg::import(const char* name, GfxTexture* resource, GfxTextureDescr* descr)
+        FgTexture fg_import(Fg* fg, const char* name, GfxTexture* resource, GfxTextureDescr* descr)
         {
             // ...
             // ti->m_resource.m_flags     = IMPORTED;
@@ -134,7 +188,7 @@ namespace ncore
             return s_invalid_texture;
         }
 
-        FgBuffer Fg::import(const char* name, GfxBuffer* resource, GfxBufferDescr* descr)
+        FgBuffer fg_import(Fg* fg, const char* name, GfxBuffer* resource, GfxBufferDescr* descr)
         {
             // ...
             // ti->m_resource.m_flags     = IMPORTED;
@@ -142,48 +196,48 @@ namespace ncore
             return s_invalid_buffer;
         }
 
-        FgTexture Fg::create(const char* name, GfxTexture* textureObject, GfxTextureDescr* textureDescr)
+        FgTexture fg_create(Fg* fg, const char* name, GfxTexture* textureObject, GfxTextureDescr* textureDescr)
         {
-            FgTextureInfo* ti          = &m_textureinfo_array[m_textureinfo_cursor[FgMain]];
+            FgTextureInfo* ti          = &fg->m_textureinfo_array[fg->m_textureinfo_cursor[FgMain]];
             ti->m_resource.m_name      = name;
-            ti->m_resource.m_pass      = m_current_passinfo;
+            ti->m_resource.m_pass      = fg->m_current_passinfo;
             ti->m_resource.m_last      = nullptr;
             ti->m_resource.m_ref_count = 0;
             ti->m_resource.m_flags     = 0;
             ti->m_texture              = textureObject;
             ti->m_textureDescr         = textureDescr;
 
-            m_textureinfo_create_array[m_textureinfo_cursor[FgCreate]] = m_textureinfo_cursor[FgMain];
-            m_current_passinfo->m_texture_create.add(m_textureinfo_cursor[FgCreate]);
+            fg->m_textureinfo_create_array[fg->m_textureinfo_cursor[FgCreate]] = fg->m_textureinfo_cursor[FgMain];
+            fg->m_current_passinfo->m_texture_create.add(fg->m_textureinfo_cursor[FgCreate]);
 
-            m_textureinfo_cursor[FgCreate] += 1;
-            m_textureinfo_cursor[FgMain] += 1;
+            fg->m_textureinfo_cursor[FgCreate] += 1;
+            fg->m_textureinfo_cursor[FgMain] += 1;
 
             FgTexture texture;
-            texture.index      = m_textureinfo_cursor[FgCreate] - 1;
-            texture.generation = m_resource_generation;
+            texture.index      = fg->m_textureinfo_cursor[FgCreate] - 1;
+            texture.generation = fg->m_resource_generation;
             return texture;
         }
 
-        FgTexture Fg::read(FgTexture texture, FgFlags descr)
+        FgTexture fg_read(Fg* fg, FgTexture texture, FgFlags descr)
         {
-            ASSERT(is_valid(texture));
-            ASSERT(!pass_contains(m_current_passinfo, FgWrite, texture));
-            ASSERT(!pass_contains(m_current_passinfo, FgCreate, texture));
+            ASSERT(fg->is_valid(texture));
+            ASSERT(!fg->pass_contains(fg->m_current_passinfo, FgWrite, texture));
+            ASSERT(!fg->pass_contains(fg->m_current_passinfo, FgCreate, texture));
 
-            if (!pass_contains(m_current_passinfo, FgRead, texture))
+            if (!fg->pass_contains(fg->m_current_passinfo, FgRead, texture))
             {
-                m_textureinfo_flags[texture.index]                     = descr;
-                m_textureinfo_read_array[m_textureinfo_cursor[FgRead]] = texture.index;
-                m_current_passinfo->m_texture_read.add(m_textureinfo_cursor[FgRead]);
-                m_textureinfo_cursor[FgRead] += 1;
+                fg->m_textureinfo_flags[texture.index]                         = descr;
+                fg->m_textureinfo_read_array[fg->m_textureinfo_cursor[FgRead]] = texture.index;
+                fg->m_current_passinfo->m_texture_read.add(fg->m_textureinfo_cursor[FgRead]);
+                fg->m_textureinfo_cursor[FgRead] += 1;
             }
             return texture;
         }
 
-        FgTexture Fg::write(FgTexture texture, FgFlags descr)
+        FgTexture fg_write(Fg* fg, FgTexture texture, FgFlags descr)
         {
-            ASSERT(is_valid(texture));
+            ASSERT(fg->is_valid(texture));
 
             /*
                 assert(m_frameGraph.isValid(id));
@@ -201,163 +255,163 @@ namespace ncore
                     return m_passNode._write(m_frameGraph._clone(id), flags);
                 }
             */
-            ASSERT(!pass_contains(m_current_passinfo, FgRead, texture));
+            ASSERT(!fg->pass_contains(fg->m_current_passinfo, FgRead, texture));
 
-            if (pass_contains(m_current_passinfo, FgCreate, texture))
+            if (fg->pass_contains(fg->m_current_passinfo, FgCreate, texture))
             {
-                FgTextureInfo const* si                                  = &m_textureinfo_array[texture.index];
-                m_textureinfo_write_array[m_textureinfo_cursor[FgWrite]] = texture.index;
-                m_current_passinfo->m_texture_write.add(m_textureinfo_cursor[FgWrite]);
-                m_textureinfo_cursor[FgWrite] += 1;
-                m_current_passinfo->m_flags |= si->m_resource.m_flags & IMPORTED;
+                FgTextureInfo const* si                                          = &fg->m_textureinfo_array[texture.index];
+                fg->m_textureinfo_write_array[fg->m_textureinfo_cursor[FgWrite]] = texture.index;
+                fg->m_current_passinfo->m_texture_write.add(fg->m_textureinfo_cursor[FgWrite]);
+                fg->m_textureinfo_cursor[FgWrite] += 1;
+                fg->m_current_passinfo->m_flags |= si->m_resource.m_flags & IMPORTED;
                 return texture;
             }
             else
             {
-                read(texture, s_flags_ignored);
+                fg_read(fg, texture, s_flags_ignored);
 
                 // Clone FgTextureInfo
-                FgTextureInfo const* si    = &m_textureinfo_array[texture.index];
-                FgTextureInfo*       ti    = &m_textureinfo_array[m_textureinfo_cursor[FgMain]];
+                FgTextureInfo const* si    = &fg->m_textureinfo_array[texture.index];
+                FgTextureInfo*       ti    = &fg->m_textureinfo_array[fg->m_textureinfo_cursor[FgMain]];
                 ti->m_resource.m_name      = si->m_resource.m_name;
-                ti->m_resource.m_pass      = m_current_passinfo;
+                ti->m_resource.m_pass      = fg->m_current_passinfo;
                 ti->m_resource.m_last      = nullptr;
                 ti->m_resource.m_ref_count = 0;
                 ti->m_resource.m_flags     = si->m_resource.m_flags;
                 ti->m_texture              = si->m_texture;
                 ti->m_textureDescr         = si->m_textureDescr;
 
-                m_textureinfo_write_array[m_textureinfo_cursor[FgWrite]] = m_textureinfo_cursor[FgMain];
-                m_current_passinfo->m_texture_write.add(m_textureinfo_cursor[FgWrite]);
-                m_textureinfo_cursor[FgWrite] += 1;
+                fg->m_textureinfo_write_array[fg->m_textureinfo_cursor[FgWrite]] = fg->m_textureinfo_cursor[FgMain];
+                fg->m_current_passinfo->m_texture_write.add(fg->m_textureinfo_cursor[FgWrite]);
+                fg->m_textureinfo_cursor[FgWrite] += 1;
 
                 FgTexture texture;
-                texture.index      = m_textureinfo_cursor[FgWrite] - 1;
-                texture.generation = m_resource_generation;
+                texture.index      = fg->m_textureinfo_cursor[FgWrite] - 1;
+                texture.generation = fg->m_resource_generation;
                 return texture;
             }
 
             return s_invalid_texture;
         }
 
-        FgBuffer Fg::create(const char* name, GfxBuffer* bufferObject, GfxBufferDescr* bufferDescr)
+        FgBuffer fg_create(Fg* fg, const char* name, GfxBuffer* bufferObject, GfxBufferDescr* bufferDescr)
         {
-            FgBufferInfo* bi           = &m_bufferinfo_array[m_bufferinfo_cursor[FgMain]];
+            FgBufferInfo* bi           = &fg->m_bufferinfo_array[fg->m_bufferinfo_cursor[FgMain]];
             bi->m_resource.m_name      = name;
-            bi->m_resource.m_pass      = m_current_passinfo;
+            bi->m_resource.m_pass      = fg->m_current_passinfo;
             bi->m_resource.m_last      = nullptr;
             bi->m_resource.m_ref_count = 0;
             bi->m_buffer               = bufferObject;
             bi->m_bufferDescr          = bufferDescr;
 
-            m_bufferinfo_create_array[m_bufferinfo_cursor[FgCreate]] = m_bufferinfo_cursor[FgMain];
-            m_current_passinfo->m_buffer_create.add(m_bufferinfo_cursor[FgCreate]);
+            fg->m_bufferinfo_create_array[fg->m_bufferinfo_cursor[FgCreate]] = fg->m_bufferinfo_cursor[FgMain];
+            fg->m_current_passinfo->m_buffer_create.add(fg->m_bufferinfo_cursor[FgCreate]);
 
-            m_bufferinfo_cursor[FgCreate] += 1;
-            m_bufferinfo_cursor[FgMain] += 1;
+            fg->m_bufferinfo_cursor[FgCreate] += 1;
+            fg->m_bufferinfo_cursor[FgMain] += 1;
 
             FgBuffer fb;
-            fb.index      = m_bufferinfo_cursor[FgCreate] - 1;
-            fb.generation = m_resource_generation;
+            fb.index      = fg->m_bufferinfo_cursor[FgCreate] - 1;
+            fb.generation = fg->m_resource_generation;
             return fb;
         }
 
-        FgBuffer Fg::read(FgBuffer buffer, FgFlags descr)
+        FgBuffer fg_read(Fg* fg, FgBuffer buffer, FgFlags descr)
         {
-            ASSERT(is_valid(buffer));
-            ASSERT(!pass_contains(m_current_passinfo, FgWrite, buffer));
-            ASSERT(!pass_contains(m_current_passinfo, FgCreate, buffer));
+            ASSERT(fg->is_valid(buffer));
+            ASSERT(!fg->pass_contains(fg->m_current_passinfo, FgWrite, buffer));
+            ASSERT(!fg->pass_contains(fg->m_current_passinfo, FgCreate, buffer));
 
-            if (!pass_contains(m_current_passinfo, FgRead, buffer))
+            if (!fg->pass_contains(fg->m_current_passinfo, FgRead, buffer))
             {
-                m_bufferinfo_flags[buffer.index]                     = descr;
-                m_bufferinfo_read_array[m_bufferinfo_cursor[FgRead]] = buffer.index;
-                m_current_passinfo->m_buffer_read.add(m_bufferinfo_cursor[FgRead]);
-                m_bufferinfo_cursor[FgRead] += 1;
+                fg->m_bufferinfo_flags[buffer.index]                         = descr;
+                fg->m_bufferinfo_read_array[fg->m_bufferinfo_cursor[FgRead]] = buffer.index;
+                fg->m_current_passinfo->m_buffer_read.add(fg->m_bufferinfo_cursor[FgRead]);
+                fg->m_bufferinfo_cursor[FgRead] += 1;
             }
             return buffer;
         }
 
-        FgBuffer Fg::write(FgBuffer buffer, FgFlags descr)
+        FgBuffer fg_write(Fg* fg, FgBuffer buffer, FgFlags descr)
         {
-            ASSERT(is_valid(buffer));
+            ASSERT(fg->is_valid(buffer));
 
-            if (pass_contains(m_current_passinfo, FgCreate, buffer))
+            if (fg->pass_contains(fg->m_current_passinfo, FgCreate, buffer))
             {
-                FgBufferInfo const* si                                 = &m_bufferinfo_array[buffer.index];
-                m_bufferinfo_write_array[m_bufferinfo_cursor[FgWrite]] = buffer.index;
-                m_current_passinfo->m_buffer_write.add(m_bufferinfo_cursor[FgWrite]);
-                m_bufferinfo_cursor[FgWrite] += 1;
-                m_current_passinfo->m_flags |= si->m_resource.m_flags & IMPORTED;
+                FgBufferInfo const* si                                         = &fg->m_bufferinfo_array[buffer.index];
+                fg->m_bufferinfo_write_array[fg->m_bufferinfo_cursor[FgWrite]] = buffer.index;
+                fg->m_current_passinfo->m_buffer_write.add(fg->m_bufferinfo_cursor[FgWrite]);
+                fg->m_bufferinfo_cursor[FgWrite] += 1;
+                fg->m_current_passinfo->m_flags |= si->m_resource.m_flags & IMPORTED;
                 return buffer;
             }
             else
             {
-                read(buffer, s_flags_ignored);
+                fg_read(fg, buffer, s_flags_ignored);
 
                 // Clone FgBufferInfo
-                FgBufferInfo const* si     = &m_bufferinfo_array[buffer.index];
-                FgBufferInfo*       bi     = &m_bufferinfo_array[m_bufferinfo_cursor[FgMain]];
+                FgBufferInfo const* si     = &fg->m_bufferinfo_array[buffer.index];
+                FgBufferInfo*       bi     = &fg->m_bufferinfo_array[fg->m_bufferinfo_cursor[FgMain]];
                 bi->m_resource.m_name      = si->m_resource.m_name;
-                bi->m_resource.m_pass      = m_current_passinfo;
+                bi->m_resource.m_pass      = fg->m_current_passinfo;
                 bi->m_resource.m_last      = nullptr;
                 bi->m_resource.m_ref_count = 0;
                 bi->m_resource.m_flags     = si->m_resource.m_flags;
                 bi->m_buffer               = si->m_buffer;
                 bi->m_bufferDescr          = si->m_bufferDescr;
 
-                m_bufferinfo_write_array[m_bufferinfo_cursor[FgWrite]] = m_bufferinfo_cursor[FgMain];
-                m_current_passinfo->m_buffer_write.add(m_bufferinfo_cursor[FgWrite]);
-                m_bufferinfo_cursor[FgWrite] += 1;
+                fg->m_bufferinfo_write_array[fg->m_bufferinfo_cursor[FgWrite]] = fg->m_bufferinfo_cursor[FgMain];
+                fg->m_current_passinfo->m_buffer_write.add(fg->m_bufferinfo_cursor[FgWrite]);
+                fg->m_bufferinfo_cursor[FgWrite] += 1;
 
                 FgBuffer buffer;
-                buffer.index      = m_bufferinfo_cursor[FgWrite] - 1;
-                buffer.generation = m_resource_generation;
+                buffer.index      = fg->m_bufferinfo_cursor[FgWrite] - 1;
+                buffer.generation = fg->m_resource_generation;
                 return buffer;
             }
 
             return s_invalid_buffer;
         }
 
-        GfxTexture*      Fg::get(FgTexture resource) const { return m_textureinfo_array[resource.index].m_texture; }
-        GfxBuffer*       Fg::get(FgBuffer resource) const { return m_bufferinfo_array[resource.index].m_buffer; }
-        GfxTextureDescr* Fg::getDescr(FgTexture resource) const { return m_textureinfo_array[resource.index].m_textureDescr; }
-        GfxBufferDescr*  Fg::getDescr(FgBuffer resource) const { return m_bufferinfo_array[resource.index].m_bufferDescr; }
-        FgFlags          Fg::getFlags(FgTexture resource) const { return m_textureinfo_flags[resource.index]; }
-        FgFlags          Fg::getFlags(FgBuffer resource) const { return m_bufferinfo_flags[resource.index]; }
+        GfxTexture*      fg_get(Fg* fg, FgTexture resource) { return fg->m_textureinfo_array[resource.index].m_texture; }
+        GfxBuffer*       fg_get(Fg* fg, FgBuffer resource) { return fg->m_bufferinfo_array[resource.index].m_buffer; }
+        GfxTextureDescr* fg_getDescr(Fg* fg, FgTexture resource) { return fg->m_textureinfo_array[resource.index].m_textureDescr; }
+        GfxBufferDescr*  fg_getDescr(Fg* fg, FgBuffer resource) { return fg->m_bufferinfo_array[resource.index].m_bufferDescr; }
+        FgFlags          fg_getFlags(Fg* fg, FgTexture resource) { return fg->m_textureinfo_flags[resource.index]; }
+        FgFlags          fg_getFlags(Fg* fg, FgBuffer resource) { return fg->m_bufferinfo_flags[resource.index]; }
 
-        void Fg::compile(alloc_t* allocator)
+        void fg_compile(Fg* fg, alloc_t* allocator)
         {
             // Reset ref-counts
-            for (s32 i = 0; i < m_textureinfo_cursor[FgCreate]; ++i)
+            for (s32 i = 0; i < fg->m_textureinfo_cursor[FgCreate]; ++i)
             {
-                FgTextureInfo* texture          = &m_textureinfo_array[i];
+                FgTextureInfo* texture          = &fg->m_textureinfo_array[i];
                 texture->m_resource.m_ref_count = 0;
             }
-            for (s32 i = 0; i < m_bufferinfo_cursor[FgCreate]; ++i)
+            for (s32 i = 0; i < fg->m_bufferinfo_cursor[FgCreate]; ++i)
             {
-                FgBufferInfo* buffer           = &m_bufferinfo_array[i];
+                FgBufferInfo* buffer           = &fg->m_bufferinfo_array[i];
                 buffer->m_resource.m_ref_count = 0;
             }
 
             // Calculate ref-counts of resources used by passes
             {
-                for (s32 i = 0; i < m_pass_array_size; ++i)
+                for (s32 i = 0; i < fg->m_pass_array_size; ++i)
                 {
-                    FgPassInfo* pass  = &m_passinfo_array[i];
+                    FgPassInfo* pass  = &fg->m_passinfo_array[i];
                     pass->m_ref_count = static_cast<s32>(pass->m_texture_write.size()) + static_cast<s32>(pass->m_buffer_write.size());
 
                     // Texture and Buffer read
                     for (s32 j = pass->m_texture_read.begin; j < pass->m_texture_read.end; ++j)
                     {
-                        FgIndex const  index    = m_textureinfo_read_array[j];
-                        FgTextureInfo* consumed = &m_textureinfo_array[index];
+                        FgIndex const  index    = fg->m_textureinfo_read_array[j];
+                        FgTextureInfo* consumed = &fg->m_textureinfo_array[index];
                         consumed->m_resource.m_ref_count++;
                     }
                     for (s32 j = pass->m_buffer_read.begin; j < pass->m_buffer_read.end; ++j)
                     {
-                        FgIndex const index    = m_bufferinfo_read_array[j];
-                        FgBufferInfo* consumed = &m_bufferinfo_array[index];
+                        FgIndex const index    = fg->m_bufferinfo_read_array[j];
+                        FgBufferInfo* consumed = &fg->m_bufferinfo_array[index];
                         consumed->m_resource.m_ref_count++;
                     }
                 }
@@ -366,17 +420,17 @@ namespace ncore
             // Culling
             {
                 // Textures
-                FgResourceInfo** stack      = g_allocate_array_and_clear<FgResourceInfo*>(allocator, m_textureinfo_cursor[FgCreate]);
+                FgResourceInfo** stack      = g_allocate_array_and_clear<FgResourceInfo*>(allocator, fg->m_textureinfo_cursor[FgCreate]);
                 s32              stack_size = 0;
-                for (s32 i = 0; i < m_textureinfo_cursor[FgCreate]; ++i)
+                for (s32 i = 0; i < fg->m_textureinfo_cursor[FgCreate]; ++i)
                 {
-                    FgTextureInfo* texture = &m_textureinfo_array[i];
+                    FgTextureInfo* texture = &fg->m_textureinfo_array[i];
                     if (texture->m_resource.m_ref_count == 0)
                         stack[stack_size++] = &texture->m_resource;
                 }
-                for (s32 i = 0; i < m_bufferinfo_cursor[FgCreate]; ++i)
+                for (s32 i = 0; i < fg->m_bufferinfo_cursor[FgCreate]; ++i)
                 {
-                    FgBufferInfo* buffer = &m_bufferinfo_array[i];
+                    FgBufferInfo* buffer = &fg->m_bufferinfo_array[i];
                     if (buffer->m_resource.m_ref_count == 0)
                         stack[stack_size++] = &buffer->m_resource;
                 }
@@ -393,15 +447,15 @@ namespace ncore
                     {
                         for (s32 j = producer->m_texture_read.begin; j < producer->m_texture_read.end; ++j)
                         {
-                            FgIndex const  index    = m_textureinfo_read_array[j];
-                            FgTextureInfo* consumed = &m_textureinfo_array[index];
+                            FgIndex const  index    = fg->m_textureinfo_read_array[j];
+                            FgTextureInfo* consumed = &fg->m_textureinfo_array[index];
                             if (--consumed->m_resource.m_ref_count == 0)
                                 stack[stack_size++] = &consumed->m_resource;
                         }
                         for (s32 j = producer->m_buffer_read.begin; j < producer->m_buffer_read.end; ++j)
                         {
-                            FgIndex const index    = m_bufferinfo_read_array[j];
-                            FgBufferInfo* consumed = &m_bufferinfo_array[index];
+                            FgIndex const index    = fg->m_bufferinfo_read_array[j];
+                            FgBufferInfo* consumed = &fg->m_bufferinfo_array[index];
                             if (--consumed->m_resource.m_ref_count == 0)
                                 stack[stack_size++] = &consumed->m_resource;
                         }
@@ -411,113 +465,113 @@ namespace ncore
 
                 // Calculate resources lifetime
                 {
-                    for (s32 i = 0; i < m_pass_array_size; ++i)
+                    for (s32 i = 0; i < fg->m_pass_array_size; ++i)
                     {
-                        FgPassInfo* pass = &m_passinfo_array[i];
+                        FgPassInfo* pass = &fg->m_passinfo_array[i];
                         if (pass->m_ref_count == 0)
                             continue;
 
                         // Created Textures and Buffers
                         for (s32 j = pass->m_texture_create.begin; j < pass->m_texture_create.end; ++j)
                         {
-                            FgIndex const index                          = m_textureinfo_create_array[j];
-                            m_textureinfo_array[index].m_resource.m_pass = pass;
+                            FgIndex const index                              = fg->m_textureinfo_create_array[j];
+                            fg->m_textureinfo_array[index].m_resource.m_pass = pass;
                         }
                         for (s32 j = pass->m_buffer_create.begin; j < pass->m_buffer_create.end; ++j)
                         {
-                            FgIndex const index                         = m_bufferinfo_create_array[j];
-                            m_bufferinfo_array[index].m_resource.m_pass = pass;
+                            FgIndex const index                             = fg->m_bufferinfo_create_array[j];
+                            fg->m_bufferinfo_array[index].m_resource.m_pass = pass;
                         }
 
                         // Read Textures and Buffers
                         for (s32 j = pass->m_texture_read.begin; j < pass->m_texture_read.end; ++j)
                         {
-                            FgIndex const index                          = m_textureinfo_read_array[j];
-                            m_textureinfo_array[index].m_resource.m_last = pass;
+                            FgIndex const index                              = fg->m_textureinfo_read_array[j];
+                            fg->m_textureinfo_array[index].m_resource.m_last = pass;
                         }
                         for (s32 j = pass->m_buffer_read.begin; j < pass->m_buffer_read.end; ++j)
                         {
-                            FgIndex const index                         = m_bufferinfo_read_array[j];
-                            m_bufferinfo_array[index].m_resource.m_last = pass;
+                            FgIndex const index                             = fg->m_bufferinfo_read_array[j];
+                            fg->m_bufferinfo_array[index].m_resource.m_last = pass;
                         }
 
                         // Written Textures and Buffers
                         for (s32 j = pass->m_texture_write.begin; j < pass->m_texture_write.end; ++j)
                         {
-                            FgIndex const index                          = m_textureinfo_write_array[j];
-                            m_textureinfo_array[index].m_resource.m_last = pass;
+                            FgIndex const index                              = fg->m_textureinfo_write_array[j];
+                            fg->m_textureinfo_array[index].m_resource.m_last = pass;
                         }
                         for (s32 j = pass->m_buffer_write.begin; j < pass->m_buffer_write.end; ++j)
                         {
-                            FgIndex const index                         = m_bufferinfo_write_array[j];
-                            m_bufferinfo_array[index].m_resource.m_last = pass;
+                            FgIndex const index                             = fg->m_bufferinfo_write_array[j];
+                            fg->m_bufferinfo_array[index].m_resource.m_last = pass;
                         }
                     }
                 }
             }
         }
 
-        void Fg::execute(GfxRenderContext* ctxt)
+        void fg_execute(Fg* fg, GfxRenderContext* ctxt)
         {
-            for (s32 i = 0; i < m_pass_array_size; ++i)
+            for (s32 i = 0; i < fg->m_pass_array_size; ++i)
             {
-                FgPassInfo* pass = &m_passinfo_array[i];
+                FgPassInfo* pass = &fg->m_passinfo_array[i];
                 if (pass->m_ref_count == 0 && !((pass->m_flags & HAS_SIDE_EFFECTS) == HAS_SIDE_EFFECTS))
                     continue;
 
                 // Create transient resources
                 for (s32 j = pass->m_texture_create.begin; j < pass->m_texture_create.end; ++j)
                 {
-                    FgIndex        index   = m_textureinfo_create_array[j];
-                    FgTextureInfo* texture = &m_textureinfo_array[index];
+                    FgIndex        index   = fg->m_textureinfo_create_array[j];
+                    FgTextureInfo* texture = &fg->m_textureinfo_array[index];
                     if (texture->m_resource.m_last == pass)
-                        m_create_texture.Call(ctxt, texture->m_texture, texture->m_textureDescr);
+                        fg->m_create_texture.Call(ctxt, texture->m_texture, texture->m_textureDescr);
                 }
                 for (s32 j = pass->m_buffer_create.begin; j < pass->m_buffer_create.end; ++j)
                 {
-                    FgIndex       index  = m_bufferinfo_create_array[j];
-                    FgBufferInfo* buffer = &m_bufferinfo_array[index];
+                    FgIndex       index  = fg->m_bufferinfo_create_array[j];
+                    FgBufferInfo* buffer = &fg->m_bufferinfo_array[index];
                     if (buffer->m_resource.m_last == pass)
-                        m_create_buffer.Call(ctxt, buffer->m_buffer, buffer->m_bufferDescr);
+                        fg->m_create_buffer.Call(ctxt, buffer->m_buffer, buffer->m_bufferDescr);
                 }
 
                 // Pre-read and pre-write
                 for (s32 j = pass->m_texture_read.begin; j < pass->m_texture_read.end; ++j)
                 {
-                    if (m_textureinfo_flags[j].m_descr != s_flags_ignored.m_descr)
-                        m_preread_texture.Call(ctxt, m_textureinfo_array[j].m_texture, m_textureinfo_flags[j]);
+                    if (fg->m_textureinfo_flags[j].m_descr != s_flags_ignored.m_descr)
+                        fg->m_preread_texture.Call(ctxt, fg->m_textureinfo_array[j].m_texture, fg->m_textureinfo_flags[j]);
                 }
                 for (s32 j = pass->m_buffer_read.begin; j < pass->m_buffer_read.end; ++j)
                 {
-                    if (m_bufferinfo_flags[j].m_descr != s_flags_ignored.m_descr)
-                        m_preread_buffer.Call(ctxt, m_bufferinfo_array[j].m_buffer, m_bufferinfo_flags[j]);
+                    if (fg->m_bufferinfo_flags[j].m_descr != s_flags_ignored.m_descr)
+                        fg->m_preread_buffer.Call(ctxt, fg->m_bufferinfo_array[j].m_buffer, fg->m_bufferinfo_flags[j]);
                 }
                 for (s32 j = pass->m_texture_write.begin; j < pass->m_texture_write.end; ++j)
                 {
-                    if (m_textureinfo_flags[j].m_descr != s_flags_ignored.m_descr)
-                        m_prewrite_texture.Call(ctxt, m_textureinfo_array[j].m_texture, m_textureinfo_flags[j]);
+                    if (fg->m_textureinfo_flags[j].m_descr != s_flags_ignored.m_descr)
+                        fg->m_prewrite_texture.Call(ctxt, fg->m_textureinfo_array[j].m_texture, fg->m_textureinfo_flags[j]);
                 }
                 for (s32 j = pass->m_buffer_write.begin; j < pass->m_buffer_write.end; ++j)
                 {
-                    if (m_bufferinfo_flags[j].m_descr != s_flags_ignored.m_descr)
-                        m_prewrite_buffer.Call(ctxt, m_bufferinfo_array[j].m_buffer, m_bufferinfo_flags[j]);
+                    if (fg->m_bufferinfo_flags[j].m_descr != s_flags_ignored.m_descr)
+                        fg->m_prewrite_buffer.Call(ctxt, fg->m_bufferinfo_array[j].m_buffer, fg->m_bufferinfo_flags[j]);
                 }
 
                 // Execute pass
-                pass->m_execute_fn.Call(*this, ctxt);
+                pass->m_execute_fn.Call(fg, ctxt);
 
                 // Destroy transient resources
-                for (s32 j = 0; j < m_textureinfo_cursor[FgMain]; ++j)
+                for (s32 j = 0; j < fg->m_textureinfo_cursor[FgMain]; ++j)
                 {
-                    FgTextureInfo* texture = &m_textureinfo_array[j];
+                    FgTextureInfo* texture = &fg->m_textureinfo_array[j];
                     if (texture->m_resource.m_last == pass /* && texture is transient*/)
-                        m_destroy_texture.Call(ctxt, texture->m_texture);
+                        fg->m_destroy_texture.Call(ctxt, texture->m_texture);
                 }
-                for (s32 j = 0; j < m_bufferinfo_cursor[FgMain]; ++j)
+                for (s32 j = 0; j < fg->m_bufferinfo_cursor[FgMain]; ++j)
                 {
-                    FgBufferInfo* buffer = &m_bufferinfo_array[j];
+                    FgBufferInfo* buffer = &fg->m_bufferinfo_array[j];
                     if (buffer->m_resource.m_last == pass /* && buffer is transient*/)
-                        m_destroy_buffer.Call(ctxt, buffer->m_buffer);
+                        fg->m_destroy_buffer.Call(ctxt, buffer->m_buffer);
                 }
             }
         }

@@ -90,17 +90,17 @@ namespace ncore
                 GfxTexture      targetTexture;
                 GfxTextureDescr targetTextureDescr;
 
-                void setup(Fg& fg)
+                void setup(Fg* fg)
                 {
-                    pass = fg.add_pass("SimplePass", callback_t(this, &SimplePass::execute));
+                    pass = fg_add_pass(fg, "SimplePass", callback_t(this, &SimplePass::execute));
 
-                    out_RT = fg.create("SimplePassOutput", &targetTexture, &targetTextureDescr);
-                    fg.write(out_RT);
+                    out_RT = fg_create(fg, "SimplePassOutput", &targetTexture, &targetTextureDescr);
+                    fg_write(fg, out_RT);
                 }
 
-                void execute(Fg& fg, GfxRenderContext* ctxt)
+                void execute(Fg* fg, GfxRenderContext* ctxt)
                 {
-                    GfxTexture* gtarget = fg.get(out_RT);
+                    GfxTexture* gtarget = fg_get(fg, out_RT);
 
                     // ...
                 }
@@ -118,22 +118,21 @@ namespace ncore
             {
                 GfxRenderContext ctxt;
 
-                Fg fg;
-                fg.setup(allocator, 4096, 1024);
+                Fg* fg = fg_setup(allocator, 4096, 1024);
                 {
-                    fg.set_create_texture(callback_t<void, GfxRenderContext*, GfxTexture*, GfxTextureDescr*>(createTexture));
-                    fg.set_destroy_texture(callback_t<void, GfxRenderContext*, GfxTexture*>(destroyTexture));
+                    fg_set_create_texture(fg, callback_t<void, GfxRenderContext*, GfxTexture*, GfxTextureDescr*>(createTexture));
+                    fg_set_destroy_texture(fg, callback_t<void, GfxRenderContext*, GfxTexture*>(destroyTexture));
 
-                    fg.set_create_buffer(callback_t<void, GfxRenderContext*, GfxBuffer*, GfxBufferDescr*>(createBuffer));
-                    fg.set_destroy_buffer(callback_t<void, GfxRenderContext*, GfxBuffer*>(destroyBuffer));
+                    fg_set_create_buffer(fg, callback_t<void, GfxRenderContext*, GfxBuffer*, GfxBufferDescr*>(createBuffer));
+                    fg_set_destroy_buffer(fg, callback_t<void, GfxRenderContext*, GfxBuffer*>(destroyBuffer));
 
                     SimplePass simplePass(1280, 720);
                     simplePass.setup(fg);
 
-                    fg.compile(allocator);
-                    fg.execute(&ctxt);
+                    fg_compile(fg, allocator);
+                    fg_execute(fg, &ctxt);
                 }
-                fg.teardown(allocator);
+                fg_teardown(fg);
             }
 
         } // namespace nfg
@@ -158,26 +157,26 @@ namespace ncore
                     GfxTextureDescr normalTextureDescr;
                     GfxTextureDescr albedoTextureDescr;
 
-                    void setup(Fg& fg, GfxRenderables* ra)
+                    void setup(Fg* fg, GfxRenderables* ra)
                     {
-                        pass = fg.add_pass("GBufferPass", callback_t(this, &GBufferPass::execute));
+                        pass = fg_add_pass(fg, "GBufferPass", callback_t(this, &GBufferPass::execute));
 
                         // Create GBuffer render targets
-                        out_depthRT = fg.create("depthRT", &depthTexture, &depthTextureDescr);
-                        out_depthRT = fg.write(out_depthRT);
+                        out_depthRT = fg_create(fg, "depthRT", &depthTexture, &depthTextureDescr);
+                        out_depthRT = fg_write(fg, out_depthRT);
 
-                        out_normalRT = fg.create("normalRT", &normalTexture, &normalTextureDescr);
-                        out_normalRT = fg.write(out_normalRT);
+                        out_normalRT = fg_create(fg, "normalRT", &normalTexture, &normalTextureDescr);
+                        out_normalRT = fg_write(fg, out_normalRT);
 
-                        out_albedoRT = fg.create("albedoRT", &albedoTexture, &albedoTextureDescr);
-                        out_albedoRT = fg.write(out_albedoRT);
+                        out_albedoRT = fg_create(fg, "albedoRT", &albedoTexture, &albedoTextureDescr);
+                        out_albedoRT = fg_write(fg, out_albedoRT);
                     }
 
-                    void execute(Fg& fg, GfxRenderContext* ctxt)
+                    void execute(Fg* fg, GfxRenderContext* ctxt)
                     {
-                        GfxTexture* gdepth  = fg.get(out_depthRT);
-                        GfxTexture* gnormal = fg.get(out_normalRT);
-                        GfxTexture* galbedo = fg.get(out_albedoRT);
+                        GfxTexture* gdepth  = fg_get(fg, out_depthRT);
+                        GfxTexture* gnormal = fg_get(fg, out_normalRT);
+                        GfxTexture* galbedo = fg_get(fg, out_albedoRT);
 
                         GfxRenderContext* rc = (GfxRenderContext*)ctxt;
                         rc->beginRenderPass(gdepth, gnormal, galbedo);
@@ -214,31 +213,31 @@ namespace ncore
                     GfxTexture      hdrTexture;
                     GfxTextureDescr hdrTextureDescr;
 
-                    void setup(Fg& fg, FgTexture _in_depthRT, FgTexture _in_normalRT, FgTexture _in_albedoRT)
+                    void setup(Fg* fg, FgTexture _in_depthRT, FgTexture _in_normalRT, FgTexture _in_albedoRT)
                     {
                         in_depthRT  = _in_depthRT;
                         in_normalRT = _in_normalRT;
                         in_albedoRT = _in_albedoRT;
 
-                        pass = fg.add_pass("LightingPass", callback_t(this, &LightingPass::execute));
+                        pass = fg_add_pass(fg, "LightingPass", callback_t(this, &LightingPass::execute));
                         {
                             // Lighting pass is reading gbuffer render targets
-                            fg.read(in_depthRT);
-                            fg.read(in_normalRT);
-                            fg.read(in_albedoRT);
+                            fg_read(fg, in_depthRT);
+                            fg_read(fg, in_normalRT);
+                            fg_read(fg, in_albedoRT);
 
                             // Lighting pass is generating a HDR render target
-                            output_HDR = fg.create("HDR", &hdrTexture, &hdrTextureDescr);
-                            output_HDR = fg.write(output_HDR);
+                            output_HDR = fg_create(fg, "HDR", &hdrTexture, &hdrTextureDescr);
+                            output_HDR = fg_write(fg, output_HDR);
                         }
                     }
 
-                    void execute(Fg& fg, GfxRenderContext* ctxt)
+                    void execute(Fg* fg, GfxRenderContext* ctxt)
                     {
-                        GfxTexture* ghdr    = fg.get(output_HDR);
-                        GfxTexture* gdepth  = fg.get(in_depthRT);
-                        GfxTexture* gnormal = fg.get(in_normalRT);
-                        GfxTexture* galbedo = fg.get(in_albedoRT);
+                        GfxTexture* ghdr    = fg_get(fg, output_HDR);
+                        GfxTexture* gdepth  = fg_get(fg, in_depthRT);
+                        GfxTexture* gnormal = fg_get(fg, in_normalRT);
+                        GfxTexture* galbedo = fg_get(fg, in_albedoRT);
 
                         GfxRenderContext* rc = (GfxRenderContext*)ctxt;
                         rc->beginRenderPass(ghdr);
@@ -276,14 +275,13 @@ namespace ncore
                 GfxRenderContext ctxt;
                 GfxRenderables   gbuffer_pass_ra;
 
-                Fg fg;
-                fg.setup(allocator, 4096, 1024);
+                Fg* fg = fg_setup(allocator, 4096, 1024);
                 {
-                    fg.set_create_texture(callback_t<void, GfxRenderContext*, GfxTexture*, GfxTextureDescr*>(createTexture));
-                    fg.set_destroy_texture(callback_t<void, GfxRenderContext*, GfxTexture*>(destroyTexture));
+                    fg_set_create_texture(fg, callback_t<void, GfxRenderContext*, GfxTexture*, GfxTextureDescr*>(createTexture));
+                    fg_set_destroy_texture(fg, callback_t<void, GfxRenderContext*, GfxTexture*>(destroyTexture));
 
-                    fg.set_create_buffer(callback_t<void, GfxRenderContext*, GfxBuffer*, GfxBufferDescr*>(createBuffer));
-                    fg.set_destroy_buffer(callback_t<void, GfxRenderContext*, GfxBuffer*>(destroyBuffer));
+                    fg_set_create_buffer(fg, callback_t<void, GfxRenderContext*, GfxBuffer*, GfxBufferDescr*>(createBuffer));
+                    fg_set_destroy_buffer(fg, callback_t<void, GfxRenderContext*, GfxBuffer*>(destroyBuffer));
 
                     DeferredLighting::GBufferPass gbufferPass(width, height);
                     gbufferPass.setup(fg, &gbuffer_pass_ra);
@@ -291,10 +289,10 @@ namespace ncore
                     DeferredLighting::LightingPass lightingPass(width, height);
                     lightingPass.setup(fg, gbufferPass.out_depthRT, gbufferPass.out_normalRT, gbufferPass.out_albedoRT);
 
-                    fg.compile(allocator);
-                    fg.execute(&ctxt);
+                    fg_compile(fg, allocator);
+                    fg_execute(fg, &ctxt);
                 }
-                fg.teardown(allocator);
+                fg_teardown(fg);
             }
         } // namespace nfg
 
@@ -383,11 +381,11 @@ namespace ncore
                         {
                         }
 
-                        void setup(Fg& fg, FgTexture input)
+                        void setup(Fg* fg, FgTexture input)
                         {
-                            pass = fg.add_pass("FXAA", callback_t(this, &FXAA::execute));
+                            pass = fg_add_pass(fg, "FXAA", callback_t(this, &FXAA::execute));
                             {
-                                GfxTextureDescr* inputDescr = fg.getDescr(input);
+                                GfxTextureDescr* inputDescr = fg_getDescr(fg, input);
                                 // Copy the input texture description to the output texture description
                                 outputTextureDescr.width  = inputDescr->width;
                                 outputTextureDescr.height = inputDescr->height;
@@ -395,15 +393,15 @@ namespace ncore
 
                                 // The input and how and from where we are going to read it
                                 TextureRead input_tr = setupTextureRead(2, 0, PipelineStage_FragmentShader, TextureRead::Type::CombinedImageSampler);
-                                fg.read(input, encodeTextureRead(input_tr));
+                                fg_read(fg, input, encodeTextureRead(input_tr));
 
                                 // We require an output render target and we will write the result of FXAA to that target
-                                out_FXAA = fg.create("FXAA_RT", &outputTexture, &outputTextureDescr);
-                                out_FXAA = fg.write(out_FXAA);
+                                out_FXAA = fg_create(fg, "FXAA_RT", &outputTexture, &outputTextureDescr);
+                                out_FXAA = fg_write(fg, out_FXAA);
                             }
                         }
 
-                        void execute(Fg& fg, GfxRenderContext* ctxt)
+                        void execute(Fg* fg, GfxRenderContext* ctxt)
                         {
                             GfxRenderContext& rc = *(GfxRenderContext*)ctxt;
                             // renderFullScreenPostProcess(rc);
@@ -419,14 +417,13 @@ namespace ncore
                     GfxRenderables   gbuffer_pass_ra;
                     GfxRenderContext ctxt;
 
-                    Fg fg;
-                    fg.setup(allocator, 4096, 1024);
+                    Fg* fg = fg_setup(allocator, 4096, 1024);
                     {
-                        fg.set_create_texture(callback_t<void, GfxRenderContext*, GfxTexture*, GfxTextureDescr*>(createTexture));
-                        fg.set_destroy_texture(callback_t<void, GfxRenderContext*, GfxTexture*>(destroyTexture));
+                        fg_set_create_texture(fg, callback_t<void, GfxRenderContext*, GfxTexture*, GfxTextureDescr*>(createTexture));
+                        fg_set_destroy_texture(fg, callback_t<void, GfxRenderContext*, GfxTexture*>(destroyTexture));
 
-                        fg.set_create_buffer(callback_t<void, GfxRenderContext*, GfxBuffer*, GfxBufferDescr*>(createBuffer));
-                        fg.set_destroy_buffer(callback_t<void, GfxRenderContext*, GfxBuffer*>(destroyBuffer));
+                        fg_set_create_buffer(fg, callback_t<void, GfxRenderContext*, GfxBuffer*, GfxBufferDescr*>(createBuffer));
+                        fg_set_destroy_buffer(fg, callback_t<void, GfxRenderContext*, GfxBuffer*>(destroyBuffer));
 
                         DeferredLighting::GBufferPass gbufferPass(width, height);
                         gbufferPass.setup(fg, &gbuffer_pass_ra);
@@ -437,10 +434,10 @@ namespace ncore
                         AutomaticBinding::FXAA fxaa;
                         fxaa.setup(fg, lightingPass.output_HDR);
 
-                        fg.compile(allocator);
-                        fg.execute(&ctxt);
+                        fg_compile(fg, allocator);
+                        fg_execute(fg, &ctxt);
                     }
-                    fg.teardown(allocator);
+                    fg_teardown(fg);
                 }
 
             } // namespace AutomaticResourceBindingsAndBarriers
@@ -472,12 +469,74 @@ UNITTEST_SUITE_BEGIN(framegraph)
 
         UNITTEST_TEST(setup_teardown)
         {
-            Fg fg;
-            fg.setup(&alloc, 4096, 1024);
+            Fg* fg = fg_setup(&alloc, 4096, 1024);
 
-            fg.teardown(&alloc);
+            fg_teardown(fg);
+        }
+    }
+
+    UNITTEST_FIXTURE(examples)
+    {
+        UNITTEST_ALLOCATOR;
+
+        void*          alloc_mem  = nullptr;
+        const u32      alloc_size = 10 * cMB;
+        linear_alloc_t alloc;
+
+        UNITTEST_FIXTURE_SETUP()
+        {
+            alloc_mem = Allocator->allocate(alloc_size);
+            alloc.setup(alloc_mem, alloc_size);
         }
 
+        UNITTEST_FIXTURE_TEARDOWN() { Allocator->deallocate(alloc_mem); }
 
+        struct SimplePass
+        {
+            FgPass          pass;
+            FgTexture       out_RT;
+            GfxTexture      targetTexture;
+            GfxTextureDescr targetTextureDescr;
+
+            void execute(Fg* fg, GfxRenderContext* ctxt)
+            {
+                GfxTexture* gtarget = fg_get(fg, out_RT);
+
+                // ...
+            }
+
+            SimplePass(u16 width, u16 height)
+                : pass(s_invalid_pass)
+                , out_RT(s_invalid_texture)
+            {
+                targetTextureDescr.width  = width;
+                targetTextureDescr.height = height;
+            }
+        }; // namespace SimplePass
+
+        UNITTEST_TEST(SimpleExample)
+        {
+            GfxRenderContext ctxt;
+
+            Fg* fg = fg_setup(&alloc, 4096, 1024);
+            {
+                fg_set_create_texture(fg, callback_t<void, GfxRenderContext*, GfxTexture*, GfxTextureDescr*>(createTexture));
+                fg_set_destroy_texture(fg, callback_t<void, GfxRenderContext*, GfxTexture*>(destroyTexture));
+
+                fg_set_create_buffer(fg, callback_t<void, GfxRenderContext*, GfxBuffer*, GfxBufferDescr*>(createBuffer));
+                fg_set_destroy_buffer(fg, callback_t<void, GfxRenderContext*, GfxBuffer*>(destroyBuffer));
+
+                {
+                    SimplePass simplePass(1280, 720);
+                    simplePass.pass   = fg_add_pass(fg, "SimplePass", callback_t(&simplePass, &SimplePass::execute));
+                    simplePass.out_RT = fg_create(fg, "SimplePassOutput", &simplePass.targetTexture, &simplePass.targetTextureDescr);
+                    fg_write(fg, simplePass.out_RT);
+                }
+
+                fg_compile(fg, &alloc);
+                fg_execute(fg, &ctxt);
+            }
+            fg_teardown(fg);
+        }
     }
 }

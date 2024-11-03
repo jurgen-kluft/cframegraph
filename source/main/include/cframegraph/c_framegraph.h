@@ -80,88 +80,44 @@ namespace ncore
 
         struct Fg;
 
-        typedef callback_t<void, Fg&, GfxRenderContext*> FgExecuteFn;
+        typedef callback_t<void, Fg*, GfxRenderContext*> FgExecuteFn;
 
-        struct Fg
-        {
-            void setup(alloc_t* allocator, u32 resource_capacity, u32 pass_capacity);
-            void teardown(alloc_t* allocator);
+        Fg*  fg_setup(alloc_t* allocator, u32 resource_capacity, u32 pass_capacity);
+        void fg_teardown(Fg*& fg);
 
-            void set_create_texture(callback_t<void, GfxRenderContext*, GfxTexture*, GfxTextureDescr*> fn);
-            void set_preread_texture(callback_t<void, GfxRenderContext*, GfxTexture*, FgFlags> fn);
-            void set_prewrite_texture(callback_t<void, GfxRenderContext*, GfxTexture*, FgFlags> fn);
-            void set_destroy_texture(callback_t<void, GfxRenderContext*, GfxTexture*> fn);
+        void fg_set_create_texture(Fg* fg, callback_t<void, GfxRenderContext*, GfxTexture*, GfxTextureDescr*> fn);
+        void fg_set_preread_texture(Fg* fg, callback_t<void, GfxRenderContext*, GfxTexture*, FgFlags> fn);
+        void fg_set_prewrite_texture(Fg* fg, callback_t<void, GfxRenderContext*, GfxTexture*, FgFlags> fn);
+        void fg_set_destroy_texture(Fg* fg, callback_t<void, GfxRenderContext*, GfxTexture*> fn);
 
-            void set_create_buffer(callback_t<void, GfxRenderContext*, GfxBuffer*, GfxBufferDescr*> fn);
-            void set_preread_buffer(callback_t<void, GfxRenderContext*, GfxBuffer*, FgFlags> fn);
-            void set_prewrite_buffer(callback_t<void, GfxRenderContext*, GfxBuffer*, FgFlags> fn);
-            void set_destroy_buffer(callback_t<void, GfxRenderContext*, GfxBuffer*> fn);
+        void fg_set_create_buffer(Fg* fg, callback_t<void, GfxRenderContext*, GfxBuffer*, GfxBufferDescr*> fn);
+        void fg_set_preread_buffer(Fg* fg, callback_t<void, GfxRenderContext*, GfxBuffer*, FgFlags> fn);
+        void fg_set_prewrite_buffer(Fg* fg, callback_t<void, GfxRenderContext*, GfxBuffer*, FgFlags> fn);
+        void fg_set_destroy_buffer(Fg* fg, callback_t<void, GfxRenderContext*, GfxBuffer*> fn);
 
-            FgPass add_pass(const char* name, FgExecuteFn execute);
+        FgPass fg_add_pass(Fg* fg, const char* name, FgExecuteFn execute);
 
-            FgTexture import(const char* name, GfxTexture* resource, GfxTextureDescr* descr);
-            FgBuffer  import(const char* name, GfxBuffer* resource, GfxBufferDescr* descr);
+        FgTexture fg_import(Fg* fg, const char* name, GfxTexture* resource, GfxTextureDescr* descr);
+        FgBuffer  fg_import(Fg* fg, const char* name, GfxBuffer* resource, GfxBufferDescr* descr);
 
-            FgTexture create(const char* name, GfxTexture* textureObject, GfxTextureDescr* textureDescr);
-            FgTexture read(FgTexture texture, FgFlags descr = s_flags_ignored);
-            FgTexture write(FgTexture texture, FgFlags descr = s_flags_ignored);
+        FgTexture fg_create(Fg* fg, const char* name, GfxTexture* textureObject, GfxTextureDescr* textureDescr);
+        FgTexture fg_read(Fg* fg, FgTexture texture, FgFlags descr = s_flags_ignored);
+        FgTexture fg_write(Fg* fg, FgTexture texture, FgFlags descr = s_flags_ignored);
 
-            FgBuffer create(const char* name, GfxBuffer* bufferObject, GfxBufferDescr* bufferDescr);
-            FgBuffer read(FgBuffer buffer, FgFlags descr = s_flags_ignored);
-            FgBuffer write(FgBuffer buffer, FgFlags descr = s_flags_ignored);
+        FgBuffer fg_create(Fg* fg, const char* name, GfxBuffer* bufferObject, GfxBufferDescr* bufferDescr);
+        FgBuffer fg_read(Fg* fg, FgBuffer buffer, FgFlags descr = s_flags_ignored);
+        FgBuffer fg_write(Fg* fg, FgBuffer buffer, FgFlags descr = s_flags_ignored);
 
-            void compile(alloc_t* allocator);
-            void execute(GfxRenderContext* ctxt);
+        void fg_compile(Fg* fg, alloc_t* allocator);
+        void fg_execute(Fg* fg, GfxRenderContext* ctxt);
 
-            GfxTexture*      get(FgTexture resource) const;
-            GfxBuffer*       get(FgBuffer resource) const;
-            GfxTextureDescr* getDescr(FgTexture resource) const;
-            GfxBufferDescr*  getDescr(FgBuffer resource) const;
-            FgFlags          getFlags(FgTexture resource) const;
-            FgFlags          getFlags(FgBuffer resource) const;
+        GfxTexture*      fg_get(Fg* fg, FgTexture resource);
+        GfxBuffer*       fg_get(Fg* fg, FgBuffer resource);
+        GfxTextureDescr* fg_getDescr(Fg* fg, FgTexture resource);
+        GfxBufferDescr*  fg_getDescr(Fg* fg, FgBuffer resource);
+        FgFlags          fg_getFlags(Fg* fg, FgTexture resource);
+        FgFlags          fg_getFlags(Fg* fg, FgBuffer resource);
 
-            DCORE_CLASS_PLACEMENT_NEW_DELETE
-
-        private:
-            typedef s8          FgType;
-            static const FgType FgMain   = 0;
-            static const FgType FgCreate = 1;
-            static const FgType FgRead   = 2;
-            static const FgType FgWrite  = 3;
-
-            bool is_valid(FgTexture resource) const;
-            bool is_valid(FgBuffer resource) const;
-            bool pass_contains(FgPass pass, FgType type, FgTexture resource) const;
-            bool pass_contains(FgPass pass, FgType type, FgBuffer resource) const;
-
-            u32            m_resource_array_capacity; // maximum number of resources
-            u32            m_resource_generation;     // ID to make resources unique and recognize invalid resources
-            u32            m_pass_array_capacity;
-            u32            m_pass_array_size;
-            FgPassInfo*    m_passinfo_array;
-            FgPass         m_current_passinfo;
-            u32            m_textureinfo_cursor[4]; // current number of create texture info resources
-            u32            m_bufferinfo_cursor[4];  // current number of create buffer info resources
-            FgTextureInfo* m_textureinfo_array;
-            FgFlags*       m_textureinfo_flags;
-            FgIndex*       m_textureinfo_create_array;
-            FgIndex*       m_textureinfo_read_array;
-            FgIndex*       m_textureinfo_write_array;
-            FgBufferInfo*  m_bufferinfo_array;
-            FgFlags*       m_bufferinfo_flags;
-            FgIndex*       m_bufferinfo_create_array;
-            FgIndex*       m_bufferinfo_read_array;
-            FgIndex*       m_bufferinfo_write_array;
-
-            callback_t<void, GfxRenderContext*, GfxTexture*, GfxTextureDescr*> m_create_texture;
-            callback_t<void, GfxRenderContext*, GfxTexture*, FgFlags>          m_preread_texture;
-            callback_t<void, GfxRenderContext*, GfxTexture*, FgFlags>          m_prewrite_texture;
-            callback_t<void, GfxRenderContext*, GfxTexture*>                   m_destroy_texture;
-            callback_t<void, GfxRenderContext*, GfxBuffer*, GfxBufferDescr*>   m_create_buffer;
-            callback_t<void, GfxRenderContext*, GfxBuffer*, FgFlags>           m_preread_buffer;
-            callback_t<void, GfxRenderContext*, GfxBuffer*, FgFlags>           m_prewrite_buffer;
-            callback_t<void, GfxRenderContext*, GfxBuffer*>                    m_destroy_buffer;
-        };
     } // namespace nframegraph
 } // namespace ncore
 
