@@ -31,7 +31,7 @@ namespace ncore
             const char* m_name;
             FgExecuteFn m_execute_fn;
             u16         m_flags;
-            FgPassType  m_type;       // intermediary or final
+            s16         m_final;      // intermediary or final
             s32         m_ref_count;  // the number of resources that are written by this pass
             FgRange     m_texture[3]; // the begin and end index into the 'create/read/write' texture array
             FgRange     m_buffer[3];  // the begin and end index into the 'create/read/write' buffer array
@@ -152,14 +152,14 @@ namespace ncore
         void fg_set_prewrite_buffer(Fg* fg, callback_t<void, GfxRenderContext*, GfxBuffer*, FgFlags> fn) { fg->m_prewrite_buffer = fn; }
         void fg_set_destroy_buffer(Fg* fg, callback_t<void, GfxRenderContext*, GfxBuffer*> fn) { fg->m_destroy_buffer = fn; }
 
-        FgPass fg_open_pass(Fg* fg, const char* name, FgPassType type, FgExecuteFn execute)
+        static FgPass s_fg_open_pass(Fg* fg, const char* name, FgExecuteFn execute, s16 final)
         {
             ASSERT(fg->m_current_passinfo == nullptr);
 
             FgPassInfo* pi   = &fg->m_passinfo_array[fg->m_pass_array_size];
             pi->m_name       = name;
             pi->m_execute_fn = execute;
-            pi->m_type       = type;
+            pi->m_final      = final;
             pi->m_flags      = 0;
             pi->m_ref_count  = 0;
             for (s32 i = FgCreate; i <= FgWrite; ++i)
@@ -172,6 +172,9 @@ namespace ncore
             fg->m_current_passinfo = pi;
             return pi;
         }
+
+        FgPass fg_open_pass(Fg* fg, const char* name, FgExecuteFn execute) { return s_fg_open_pass(fg, name, execute, 0); }
+        FgPass fg_final_pass(Fg* fg, const char* name, FgExecuteFn execute) { return s_fg_open_pass(fg, name, execute, 1); }
 
         void fg_close_pass(Fg* fg)
         {
@@ -469,14 +472,14 @@ namespace ncore
                         FgIndex const   index    = fg->m_textureinfo_crw_array[FgWrite][j];
                         FgResourceInfo* resource = &fg->m_textureinfo_array[index].m_resource;
                         resource->m_pass         = pass;
-                        resource->m_ref_count += (pass->m_type == FgPassFinal) ? 1 : 0;
+                        resource->m_ref_count += (pass->m_final == 1) ? 1 : 0;
                     }
                     for (s32 j = pass->m_buffer[FgWrite].begin; j < pass->m_buffer[FgWrite].end; ++j)
                     {
                         FgIndex const   index    = fg->m_bufferinfo_crw_array[FgWrite][j];
                         FgResourceInfo* resource = &fg->m_bufferinfo_array[index].m_resource;
                         resource->m_pass         = pass;
-                        resource->m_ref_count += (pass->m_type == FgPassFinal) ? 1 : 0;
+                        resource->m_ref_count += (pass->m_final == 1) ? 1 : 0;
                     }
                 }
             }
@@ -508,7 +511,7 @@ namespace ncore
                         continue;
 
                     ASSERT(producer->m_ref_count >= 1);
-                    if (--producer->m_ref_count == 0 && producer->m_type == FgPassNode)
+                    if (--producer->m_ref_count == 0 && producer->m_final == 0)
                     {
                         for (s32 j = producer->m_texture[FgRead].begin; j < producer->m_texture[FgRead].end; ++j)
                         {
@@ -533,7 +536,7 @@ namespace ncore
                     for (s32 i = 0; i < fg->m_pass_array_size; ++i)
                     {
                         FgPassInfo* pass = &fg->m_passinfo_array[i];
-                        if (pass->m_ref_count == 0 && pass->m_type == FgPassNode)
+                        if (pass->m_ref_count == 0 && pass->m_final == 0)
                             continue;
 
                         // Created Textures and Buffers
@@ -581,7 +584,7 @@ namespace ncore
             for (s32 i = 0; i < fg->m_pass_array_size; ++i)
             {
                 FgPassInfo* pass = &fg->m_passinfo_array[i];
-                if (pass->m_ref_count == 0 && !((pass->m_flags & HAS_SIDE_EFFECTS) == HAS_SIDE_EFFECTS) && !(pass->m_type == FgPassFinal))
+                if (pass->m_ref_count == 0 && !((pass->m_flags & HAS_SIDE_EFFECTS) == HAS_SIDE_EFFECTS) && !(pass->m_final == 1))
                     continue;
 
                 // Create transient resources

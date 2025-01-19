@@ -60,10 +60,6 @@ namespace ncore
         typedef FgPassInfo* FgPass;
         static const FgPass s_invalid_pass = nullptr;
 
-        typedef s8              FgPassType;
-        static const FgPassType FgPassNode  = 0;
-        static const FgPassType FgPassFinal = 1;
-
         typedef u16 FgIndex;
         typedef u16 FgGeneration;
 
@@ -100,7 +96,8 @@ namespace ncore
         void fg_set_prewrite_buffer(Fg* fg, callback_t<void, GfxRenderContext*, GfxBuffer*, FgFlags> fn);
         void fg_set_destroy_buffer(Fg* fg, callback_t<void, GfxRenderContext*, GfxBuffer*> fn);
 
-        FgPass fg_open_pass(Fg* fg, const char* name, FgPassType type, FgExecuteFn execute);
+        FgPass fg_open_pass(Fg* fg, const char* name, FgExecuteFn execute);
+        FgPass fg_final_pass(Fg* fg, const char* name, FgExecuteFn execute);
         void   fg_close_pass(Fg* fg);
 
         FgTexture fg_import(Fg* fg, const char* name, GfxTexture* resource, GfxTextureDescr* descr);

@@ -102,7 +102,7 @@ namespace ncore
 
                 void setup(Fg* fg)
                 {
-                    pass = fg_open_pass(fg, "SimplePass", FgPassNode, callback_t(this, &SimplePass::execute));
+                    pass = fg_open_pass(fg, "SimplePass", callback_t(this, &SimplePass::execute));
                     {
                         out_RT = fg_create(fg, "SimplePassOutput", &targetTexture, &targetTextureDescr);
                         fg_write(fg, out_RT);
@@ -171,7 +171,7 @@ namespace ncore
 
                     void setup(Fg* fg, GfxRenderables* ra)
                     {
-                        pass = fg_open_pass(fg, "GBufferPass", FgPassNode, callback_t(this, &GBufferPass::execute));
+                        pass = fg_open_pass(fg, "GBufferPass", callback_t(this, &GBufferPass::execute));
                         { // Create GBuffer render targets
                             out_depthRT = fg_create(fg, "depthRT", &depthTexture, &depthTextureDescr);
                             out_depthRT = fg_write(fg, out_depthRT);
@@ -232,7 +232,7 @@ namespace ncore
                         in_normalRT = _in_normalRT;
                         in_albedoRT = _in_albedoRT;
 
-                        pass = fg_open_pass(fg, "LightingPass", FgPassNode, callback_t(this, &LightingPass::execute));
+                        pass = fg_open_pass(fg, "LightingPass", callback_t(this, &LightingPass::execute));
                         {
                             // Lighting pass is reading gbuffer render targets
                             fg_read(fg, in_depthRT);
@@ -397,7 +397,7 @@ namespace ncore
 
                         void setup(Fg* fg, FgTexture input)
                         {
-                            pass = fg_open_pass(fg, "FXAA", FgPassNode, callback_t(this, &FXAA::execute));
+                            pass = fg_open_pass(fg, "FXAA", callback_t(this, &FXAA::execute));
                             {
                                 GfxTextureDescr* inputDescr = fg_getDescr(fg, input);
                                 // Copy the input texture description to the output texture description
@@ -544,7 +544,7 @@ UNITTEST_SUITE_BEGIN(framegraph)
 
                 {
                     SimplePass simplePass(1280, 720);
-                    simplePass.pass = fg_open_pass(fg, "SimplePass", FgPassFinal, callback_t(&simplePass, &SimplePass::execute));
+                    simplePass.pass = fg_final_pass(fg, "SimplePass", callback_t(&simplePass, &SimplePass::execute));
                     {
                         simplePass.out_RT = fg_create(fg, "SimplePassOutput", &simplePass.targetTexture, &simplePass.targetTextureDescr);
                         fg_write(fg, simplePass.out_RT);
