@@ -21,13 +21,13 @@ func GetPackage() *denv.Package {
 	mainpkg.AddPackage(callocatorpkg)
 
 	// 'cframegraph' library
-	mainlib := denv.SetupDefaultCppLibProject("cframegraph", "github.com\\jurgen-kluft\\cframegraph")
-	mainlib.Dependencies = append(mainlib.Dependencies, cbasepkg.GetMainLib())
-	mainlib.Dependencies = append(mainlib.Dependencies, callocatorpkg.GetMainLib())
+	mainlib := denv.SetupCppLibProject("cframegraph", "github.com\\jurgen-kluft\\cframegraph")
+	mainlib.AddDependencies(cbasepkg.GetMainLib()...)
+	mainlib.AddDependencies(callocatorpkg.GetMainLib()...)
 
 	// 'cframegraph' unittest project
 	maintest := denv.SetupDefaultCppTestProject("cframegraph"+"_test", "github.com\\jurgen-kluft\\cframegraph")
-	maintest.Dependencies = append(maintest.Dependencies, cunittestpkg.GetMainLib())
+	maintest.AddDependencies(cunittestpkg.GetMainLib()...)
 	maintest.Dependencies = append(maintest.Dependencies, mainlib)
 
 	mainpkg.AddMainLib(mainlib)
