@@ -7,30 +7,43 @@ import (
 	cunittest "github.com/jurgen-kluft/cunittest/package"
 )
 
-// GetPackage returns the package object of 'cframegraph'
+const (
+	repo_path = "github.com\\jurgen-kluft"
+	repo_name = "cframegraph"
+)
+
 func GetPackage() *denv.Package {
-	// Dependencies
+	name := repo_name
+
+	// dependencies
 	cunittestpkg := cunittest.GetPackage()
 	cbasepkg := cbase.GetPackage()
-	callocatorpkg := callocator.GetPackage()
+	callocpkg := callocator.GetPackage()
 
-	// The main (cframegraph) package
-	mainpkg := denv.NewPackage("cframegraph")
+	// main package
+	mainpkg := denv.NewPackage(repo_path, repo_name)
 	mainpkg.AddPackage(cunittestpkg)
 	mainpkg.AddPackage(cbasepkg)
-	mainpkg.AddPackage(callocatorpkg)
+	mainpkg.AddPackage(callocpkg)
 
-	// 'cframegraph' library
-	mainlib := denv.SetupCppLibProject("cframegraph", "github.com\\jurgen-kluft\\cframegraph")
+	// main library
+	mainlib := denv.SetupCppLibProject(mainpkg, name)
 	mainlib.AddDependencies(cbasepkg.GetMainLib()...)
-	mainlib.AddDependencies(callocatorpkg.GetMainLib()...)
+	mainlib.AddDependencies(callocpkg.GetMainLib()...)
 
-	// 'cframegraph' unittest project
-	maintest := denv.SetupDefaultCppTestProject("cframegraph"+"_test", "github.com\\jurgen-kluft\\cframegraph")
+	// test library
+	testlib := denv.SetupCppTestLibProject(mainpkg, name)
+	testlib.AddDependencies(cbasepkg.GetTestLib()...)
+	testlib.AddDependencies(callocpkg.GetTestLib()...)
+	testlib.AddDependencies(cunittestpkg.GetTestLib()...)
+
+	// unittest project
+	maintest := denv.SetupCppTestProject(mainpkg, name)
 	maintest.AddDependencies(cunittestpkg.GetMainLib()...)
-	maintest.Dependencies = append(maintest.Dependencies, mainlib)
+	maintest.AddDependency(testlib)
 
 	mainpkg.AddMainLib(mainlib)
+	mainpkg.AddTestLib(testlib)
 	mainpkg.AddUnittest(maintest)
 	return mainpkg
 }
