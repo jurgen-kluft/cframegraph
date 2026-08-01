@@ -3,8 +3,8 @@ package cframegraph
 import (
 	callocator "github.com/jurgen-kluft/callocator/package"
 	cbase "github.com/jurgen-kluft/cbase/package"
-	denv "github.com/jurgen-kluft/ccode/denv"
 	cunittest "github.com/jurgen-kluft/cunittest/package"
+	denv "github.com/jurgen-kluft/gide/denv"
 )
 
 const (
